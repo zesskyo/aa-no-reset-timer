@@ -58,12 +58,19 @@ function loadSite(data, fetchedAt) {
     wr: wr ? {name: "World Record" + (wr.meta && wr.meta.runner ? " · " + wr.meta.runner : ""), short: "WR", splits: durs(wr), final: wr.finalIgt} : null,
   };
   if (comps.best) { comps.best.final = comps.best.splits.reduce((a, b) => a + (b || 0), 0); comps.best.name = "Sum of Best"; }
+  // each comparison's split times (the time each split ended at): a real run's own (a split it didn't have ends where the
+  // one before did); for average, best and worst, the segments added up, as LiveSplit does
+  const endsOf = r => { let t = 0; return api.derive(r).splits.map(s => t = s.end ?? t); };
+  const sums = d => { let t = 0; return d.map(v => t += v || 0); };
+  if (comps.pb) comps.pb.ends = endsOf(pb);
+  if (comps.wr) comps.wr.ends = endsOf(wr);
+  for (const k of ["avg", "best", "worst"]) if (comps[k]) comps[k].ends = sums(comps[k].splits);
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
-  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt};
+  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", sub: (data.text && data.text.siteSubtitle) || "", runs: valid.length, fetchedAt};
   log(`Stats site: ${valid.length} runs` + (pb ? `, PB ${fmt(pb.finalIgt)}` : "") + (wr ? `, WR ${fmt(wr.finalIgt)}` : ""));
 }
 
@@ -178,7 +185,7 @@ function update() {
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, title: site.title, sub: site.sub, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, thunderless: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -212,7 +219,7 @@ function compute() {
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
   const known = api.RUNS.find(r => r.start === run.start && r.player === run.player);
   const num = known ? api.runNum(known) : site.nextNum;
-  return {...base, num, done: done0, thunderless: done0 && missing.length === 1, igt: end, splits: rows.map(({end, ...r}) => r)};
+  return {...base, num, done: done0, thunderless: done0 && missing.length === 1, igt: end, splits: rows};
 }
 
 // ---------- The page ----------

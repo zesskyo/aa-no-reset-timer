@@ -20,41 +20,31 @@ html.browser{background:#000}
 body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
 .split{margin:0}
 .box{background:rgba(0,0,0,var(--bg-alpha));overflow:hidden}
-.head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:2px solid var(--line)}
-.head .t{font-weight:700;font-size:17px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.head .num{flex:1;color:var(--dim);font-size:14px;white-space:nowrap}
-.vs{border:0;background:var(--row);color:var(--text);font:inherit;font-size:13px;padding:4px 8px;cursor:pointer;white-space:nowrap}
-.vs:hover{background:var(--row-on)}
-.vs b{color:var(--dim);font-weight:400}
-.rows{padding:4px 0}
-.r{display:grid;grid-template-columns:22px 1fr auto 76px;align-items:center;gap:8px;padding:5px 12px;min-height:32px}
+.head{padding:8px 12px 6px;border-bottom:2px solid var(--line);text-align:center}
+.t1{font-weight:700;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:15px}
+.t2 .num{text-align:right;white-space:nowrap}
+.t3{display:flex;justify-content:center;gap:28px;margin-top:4px;font-size:15px;white-space:nowrap}
+.rows{padding:2px 0}
+.r{display:grid;grid-template-columns:22px 1fr auto 84px;align-items:center;gap:8px;padding:4px 12px;min-height:30px}
 .r.on{background:var(--on);color:#fff}
-.r.on .d.behind{color:#ffc2c2}
 .r img{width:20px;height:20px;image-rendering:pixelated}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .r .d{text-align:right;min-width:58px}
 .r .tm{text-align:right}
-.r.todo .n,.r.todo .tm{color:var(--dim)}
-.r.wait .n{color:var(--text)}
-.ahead{color:var(--ahead)} .behind{color:var(--behind)} .gold{color:var(--gold)}
-.detail{display:flex;align-items:flex-end;gap:10px;padding:10px 12px 2px}
-.dl{flex:1;min-width:0;display:grid;gap:3px}
-.dn{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;overflow:hidden}
-.dn img{width:32px;height:32px;image-rendering:pixelated;flex:none}
-.dn span{overflow:hidden;text-overflow:ellipsis}
-.dc{color:var(--dim);font-size:13px;white-space:nowrap}
-.dc b{color:var(--text);font-weight:400}
+.ahead{color:#2ee86a} .ahead-lose{color:#8fe3a9} .behind-gain{color:#f08a80} .behind{color:#ff3b30} .gold{color:var(--gold)}
+.detail{display:flex;align-items:flex-end;gap:10px;padding:6px 12px 2px}
+.dl{flex:1;min-width:0;display:grid;gap:3px;padding-bottom:4px}
+.dc{font-size:13px;white-space:nowrap;cursor:pointer}
+.t2 .st{text-align:left;color:var(--dim);font-size:12px;white-space:nowrap}
 .dr{text-align:right;white-space:nowrap}
-.big{font-size:44px;font-weight:700;line-height:1;letter-spacing:1px;text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums}
-.big .ms{font-size:26px}
+.big{font-size:48px;font-weight:700;line-height:1;letter-spacing:1px;text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums}
+.big .ms{font-size:28px}
 .big.paused{color:var(--dim)}
-.seg{color:var(--dim);font-size:20px;margin-top:4px;text-shadow:2px 2px 0 #000}
-.seg .ms{font-size:14px}
-.info{border-top:2px solid var(--line);margin-top:8px;padding:6px 12px 8px}
-.kv{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:14px}
-.kv span:first-child{color:var(--dim)}
-.status{font-size:12px;color:var(--dim);white-space:nowrap}
-.status.live{color:var(--ahead)}
+.seg{color:var(--dim);font-size:22px;margin-top:2px;text-shadow:2px 2px 0 #000}
+.seg .ms{font-size:15px}
+.info{margin-top:6px;padding:4px 12px 8px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:15px}
 .note{color:var(--dim);font-size:13px;padding:10px 12px;border-top:2px solid var(--line)}
 .hide{display:none}
 </style>
@@ -62,10 +52,14 @@ body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-mon
 <body>
 <div class="split">
   <div class="box">
-    <div class="head"><span class="t" id="title">AA Live</span><span class="num" id="num"></span><span class="status" id="status"></span><button class="vs" id="vs" title="Change what you're compared with"></button></div>
+    <div class="head">
+      <div class="t1" id="title">AA Live</div>
+      <div class="t2"><span class="st" id="status"></span><span id="sub"></span><span class="num" id="num"></span></div>
+      <div class="t3"><span id="pbT"></span><span id="wrT"></span></div>
+    </div>
     <div class="rows" id="rows"></div>
     <div class="detail">
-      <div class="dl"><div class="dn"><img id="segIcon" alt=""><span id="segName"></span></div><div class="dc" id="segComp"></div><div class="dc" id="segBest"></div></div>
+      <div class="dl"><div class="dc" id="segComp" title="Change what you're compared with"></div></div>
       <div class="dr"><div class="big" id="timer">0:00:00<span class="ms">.000</span></div><div class="seg" id="segTimer"></div></div>
     </div>
     <div class="info" id="info"></div>
@@ -93,14 +87,19 @@ const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(M
 // (?ms=0 hides the milliseconds)
 const showMs = P.get("ms") !== "0";
 const fmtMs = (ms, long) => fmt(ms, long) + (showMs ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0")}</span>` : "");
-const delta = ms => (ms < 0 ? "−" : "+") + fmt(Math.abs(ms));
-const cls = (ms, gold) => gold ? "gold" : ms <= 0 ? "ahead" : "behind";
+// a difference: −9.4 under a minute, otherwise −1:23 (or +1:02:03)
+const delta = ms => (ms < 0 ? "−" : "+") + (Math.abs(ms) < 60000 ? (Math.floor(Math.abs(ms) / 100) / 10).toFixed(1) : fmt(Math.abs(ms)));
+// with the milliseconds as plain text (for the header)
+const fmtFull = ms => ms == null ? "—" : fmt(ms, true) + (showMs ? "." + String(Math.floor(ms) % 1000).padStart(3, "0") : "");
+// LiveSplit's colours: ahead or behind, and gaining or losing time in that split (gold: the best that split has been)
+const colour = (d, gain, gold) => gold ? "gold" : d <= 0 ? (gain ? "ahead" : "ahead-lose") : (gain ? "behind-gain" : "behind");
 
 const es = new EventSource("/events");
 es.onmessage = e => { S = JSON.parse(e.data); connected = true; render(); };
 es.onerror = () => { connected = false; render(); };
 
-$("vs").onclick = () => {
+// clicking the comparison changes it
+$("segComp").onclick = () => {
   if (!S) return;
   const have = ORDER.filter(k => S.comps[k]);
   comp = have[(have.indexOf(comp) + 1) % have.length] || "pb";
@@ -122,18 +121,24 @@ const put = (el, html) => { if (el._h !== html) { el._h = html; el.innerHTML = h
 
 function render() {
   if (!S) { $("status").textContent = connected ? "" : "Not connected"; return; }
-  const C = S.comps[comp] || S.comps[ORDER.find(k => S.comps[k])] || null, best = S.comps.best;
+  const C = S.comps[comp] || S.comps[ORDER.find(k => S.comps[k])] || null, best = S.comps.best, pb = S.comps.pb, wr = S.comps.wr;
   const now = liveIgt(), running = S.open && !S.paused && !S.done;
-  $("title").textContent = S.title;
-  $("num").textContent = S.num ? "Run " + S.num : "";
-  put($("vs"), C ? `<b>vs</b> ${esc(C.short)}` : "No runs");
-  $("status").textContent = !connected ? "Not connected" : S.done ? (S.thunderless ? "Done · Thunderless" : "Done") : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "Live";
-  $("status").className = "status" + (running && connected ? " live" : "");
+  put($("title"), esc(S.title));
+  put($("sub"), esc(S.sub.replace(/^\((.*)\)$/, "$1")));
+  put($("num"), S.num ? "Run " + S.num : "");
+  put($("pbT"), pb ? "PB: " + fmtFull(pb.final) : "");
+  put($("wrT"), wr ? "WR: " + fmtFull(wr.final) : "");
+  $("status").textContent = !connected ? "Not connected" : S.done ? (S.thunderless ? "Thunderless" : "Done") : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
 
   const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
   const ri = rows.findIndex(r => r.from != null);
   rows.forEach(r => { r.fin = S.done ? r.has : r.has && r.from == null && ri >= 0 && r.i < ri; r.on = r.i === ri; });
   const c = i => C && C.splits[i] != null ? C.splits[i] : null, b = i => best && best.splits[i] != null ? best.splits[i] : null;
+  const ce = i => C && C.ends && C.ends[i] != null ? C.ends[i] : null;
+
+  // each finished split: how far ahead or behind at its end (its split time against the comparison's)
+  let prevD = 0;
+  rows.forEach(r => { if (r.fin && ce(r.i) != null) { r.d = r.end - ce(r.i); r.gain = r.d <= prevD; prevD = r.d; } });
 
   // (the rows are made once and then only changed, so the icons don't flicker)
   const box = $("rows");
@@ -141,42 +146,40 @@ function render() {
   while (box.children.length > rows.length) box.lastChild.remove();
   rows.forEach((r, k) => {
     let d = "", dc = "";
-    if (r.fin && c(r.i) != null) { const g = b(r.i) != null && r.cur < b(r.i); d = delta(r.cur - c(r.i)); dc = cls(r.cur - c(r.i), g); }
-    else if (r.on && c(r.i) != null && r.cur > c(r.i)) { d = delta(r.cur - c(r.i)); dc = "behind"; }
-    const shown = r.fin || r.on || r.has, el = box.children[k], [img, n, de, tm] = el.children;
+    if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
+    // the split it's on: shown once it's behind
+    else if (r.on && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
+    const el = box.children[k], [img, n, de, tm] = el.children;
     const src = S.icons[r.icon] || "";
     if (img.getAttribute("src") !== src) { if (src) img.setAttribute("src", src); else img.removeAttribute("src"); }
     img.style.visibility = src ? "" : "hidden";
-    el.className = "r" + (r.on ? " on" : "") + (shown ? "" : " todo") + (r.has && !r.fin && !r.on ? " wait" : "");
-    n.textContent = r.name; de.textContent = d; de.className = "d " + dc; tm.textContent = fmt(shown ? r.cur : c(r.i));
+    el.className = "r" + (r.on ? " on" : "");
+    // the time: when it ended, for a finished split; otherwise the comparison's
+    n.textContent = r.name; de.textContent = d; de.className = "d " + dc; tm.textContent = fmt(r.fin ? r.end : ce(r.i));
   });
 
   // what's left, going by the comparison (pace) and by the best segments (best possible time)
   const left = f => rows.filter(r => !r.fin).reduce((a, r) => a + Math.max(0, (f(r.i) ?? 0) - r.cur), 0);
   const pace = C ? now + left(c) : null, possible = best ? now + left(b) : null;
-  const pb = S.comps.pb;
+  const on = rows[ri];
   const t = $("timer");
   put(t, fmtMs(now, true));
-  t.className = "big" + (S.done ? (pb && now < pb.final ? " gold" : C && C.final != null ? " " + cls(now - C.final) : "") : !running ? " paused" : C && C.final != null ? " " + cls(pace - C.final) : "");
-  // the split it's on: its icon and name, its time, and the comparison's and best time for it
-  const on = rows[ri], icon = on && S.icons[on.icon] || "", si = $("segIcon");
-  if (si.getAttribute("src") !== icon) { if (icon) si.setAttribute("src", icon); else si.removeAttribute("src"); }
-  si.style.display = icon ? "" : "none";
-  $("segName").textContent = on ? on.name : "";
+  const liveD = on && ce(on.i) != null && now > ce(on.i) ? now - ce(on.i) : prevD;
+  t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
+  // the split it's on: its time so far, and the comparison's for it
   put($("segTimer"), on ? fmtMs(on.cur) : "");
-  put($("segComp"), on && C && c(on.i) != null ? `${esc(C.short)}: <b>${fmt(c(on.i))}</b>` : "");
-  put($("segBest"), on && b(on.i) != null ? `Best: <b>${fmt(b(on.i))}</b>` : "");
+  put($("segComp"), C && on ? `${esc(C.short)}: ${c(on.i) != null ? fmt(c(on.i)) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
   let info = "";
-  if (prev && c(prev.i) != null) info += kv("Previous segment", delta(prev.cur - c(prev.i)), cls(prev.cur - c(prev.i), b(prev.i) != null && prev.cur < b(prev.i)));
-  if (C && C.final != null && !S.done) info += kv(`Pace (vs ${esc(C.short)})`, fmt(pace, true) + ` <span class="${cls(pace - C.final)}">${delta(pace - C.final)}</span>`);
-  if (possible != null && !S.done) info += kv("Best possible time", fmt(possible, true));
-  if (best) info += kv("Sum of best", fmt(best.final, true));
-  if (pb) info += kv("Personal best", fmt(pb.final, true));
+  // the last split: against the comparison, and how much faster it's been done before (the time that could have been saved)
+  if (prev && c(prev.i) != null) { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
+    info += kv("Previous Segment", `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : "")); }
+  if (pace != null && !S.done) info += kv("Current Pace", fmtFull(pace));
+  if (possible != null && !S.done) info += kv("Best Possible Time", fmtFull(possible));
+  if (best) info += kv("Sum of Best Segments", fmtFull(best.final));
   put($("info"), info);
-
 
   const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
