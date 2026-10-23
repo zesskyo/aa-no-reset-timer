@@ -14,7 +14,8 @@ The timer and splits are a web page served on your computer, so you can open it 
 4. The splits open in your browser at <http://localhost:7476/>. To stop it, close its Terminal window.
 
 **OBS:** add a Browser source with the URL `http://localhost:7476/`, width 400 and height 600.
-The comparison can be picked in the URL: `?comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`). In a browser, click "vs …" to switch.
+The background is see-through in OBS; `?bg=60` makes it 60% black (0 to 100, `?bg=100` for solid black).
+The comparison can be picked in the URL too: `?comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`), e.g. `?bg=60&comp=avg`. In a browser, click "vs …" to switch.
 
 Options (after `node app/aa-live.mjs`):
 

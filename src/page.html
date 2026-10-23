@@ -8,16 +8,18 @@
 @font-face{font-family:"Minecraft";src:url(data:font/otf;base64,/*FONT_R*/) format("opentype");font-weight:400 500}
 @font-face{font-family:"Minecraft";src:url(data:font/otf;base64,/*FONT_B*/) format("opentype");font-weight:600 800}
 :root{
-  --bg:#000; --panel:#000; --row:#16181e; --row-on:#24324a; --line:#262a33; --on:#1f5fd6;
+  --bg-alpha:0; --row:#16181e; --row-on:#24324a; --line:#262a33; --on:#1f5fd6;
   --text:#e9ecf1; --dim:#8a92a3; --faint:#5b6273;
   --ahead:#4cd07d; --behind:#ef5b5b; --gold:#f5c542; --blue:#6aa8ff;
 }
 *{box-sizing:border-box;border-radius:0}
 button{-webkit-appearance:none;appearance:none}
 html,body{margin:0}
-body{background:var(--bg);color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
+html,body{background:transparent}
+html.browser{background:#000}
+body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
 .split{margin:0}
-.box{background:var(--panel);overflow:hidden}
+.box{background:rgba(0,0,0,var(--bg-alpha));overflow:hidden}
 .head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:2px solid var(--line)}
 .head .t{font-weight:700;font-size:17px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .head .num{flex:1;color:var(--dim);font-size:14px;white-space:nowrap}
@@ -74,6 +76,11 @@ body{background:var(--bg);color:var(--text);font-family:"Minecraft",ui-monospace
 "use strict";
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
+// the background: see-through by default (for OBS); ?bg=0 to 100 makes it that much black
+const bg = Math.min(100, Math.max(0, Number(P.get("bg")) || 0));
+document.documentElement.style.setProperty("--bg-alpha", bg / 100);
+// (in a normal browser tab there's nothing behind the page, so it's black there)
+if (!window.obsstudio) document.documentElement.classList.add("browser");
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
 let comp = P.get("comp") || store.get("aa-live-comp") || "pb";
