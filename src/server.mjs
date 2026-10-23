@@ -148,7 +148,9 @@ function readNew() {
   rest = Buffer.from(buf.subarray(end + 1));
   const lines = buf.subarray(0, end + 1);
   if (!plain) { let s = 0; for (let i = 0; i < lines.length; i++) if (lines[i] === 10) { rotate(lines.subarray(s, i)); s = i + 1; } }
-  const t = lines.toString("utf8");
+  // times are SpeedRunIGT's retimed IGT ("retime"; the IGT rounded to game ticks): put it where "igt" is, so the
+  // timer and the stats site's log reader (which read "igt") both use it
+  const t = lines.toString("utf8").replace(/"igt":\d+,"retime":(\d+)/g, '"igt":$1,"retime":$1');
   text += t;
   for (const line of t.split("\n")) watchLine(line);
   changed = true;
