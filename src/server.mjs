@@ -232,7 +232,7 @@ const server = http.createServer((req, res) => {
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
 server.listen(PORT, "127.0.0.1", () => {
   const link = `http://localhost:${PORT}/`;
-  console.log(`\nAA Live ${VERSION}\n  Splits:        ${link}\n  OBS (no background): ${link}?obs\n  Stats site:    ${SITE}\n`);
+  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}\n  Stats site:    ${SITE}\n`);
   if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
 });
 

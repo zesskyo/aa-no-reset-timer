@@ -13,8 +13,8 @@ The timer and splits are a web page served on your computer, so you can open it 
 3. Double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose Open, then Open again.
 4. The splits open in your browser at <http://localhost:7476/>. To stop it, close its Terminal window.
 
-**OBS:** add a Browser source with the URL `http://localhost:7476/?obs` (no background), width 400 and height 600.
-The comparison can be picked in the URL: `?obs&comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`). In a browser, click "vs …" to switch.
+**OBS:** add a Browser source with the URL `http://localhost:7476/`, width 400 and height 600.
+The comparison can be picked in the URL: `?comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`). In a browser, click "vs …" to switch.
 
 Options (after `node app/aa-live.mjs`):
 
