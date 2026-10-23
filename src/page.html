@@ -90,7 +90,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", 
 // 1:02:03, or 2:03 under an hour
 const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(Math.max(0, ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0"); return h || long ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
 // the same with milliseconds, smaller
-const fmtMs = (ms, long) => fmt(ms, long) + `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0")}</span>`;
+// (?ms=0 hides the milliseconds)
+const showMs = P.get("ms") !== "0";
+const fmtMs = (ms, long) => fmt(ms, long) + (showMs ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0")}</span>` : "");
 const delta = ms => (ms < 0 ? "−" : "+") + fmt(Math.abs(ms));
 const cls = (ms, gold) => gold ? "gold" : ms <= 0 ? "ahead" : "behind";
 

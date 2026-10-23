@@ -13,8 +13,11 @@ The timer and splits are a web page served on your computer, so you can open it 
 3. Double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose Open, then Open again.
 4. The splits open in your browser at <http://localhost:7476/>. To stop it, close its Terminal window.
 
+**Updating:** download the repo again and replace your folder with it (or `git pull`, if you cloned it), then close AA Live's Terminal window and start it again. In OBS, right-click the browser source › Refresh (or press "Refresh cache of current page" in its properties); in a browser, reload the page.
+
 **OBS:** add a Browser source with the URL `http://localhost:7476/`, width 400 and height 600.
 The background is see-through in OBS; `?bg=60` makes it 60% black (0 to 100, `?bg=100` for solid black).
+`?ms=0` hides the milliseconds.
 The comparison can be picked in the URL too: `?comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`), e.g. `?bg=60&comp=avg`. In a browser, click "vs …" to switch.
 
 Options (after `node app/aa-live.mjs`):
