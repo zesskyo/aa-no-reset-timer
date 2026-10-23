@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AA Live</title>
+<style>
+@font-face{font-family:"Minecraft";src:url(data:font/otf;base64,/*FONT_R*/) format("opentype");font-weight:400 500}
+@font-face{font-family:"Minecraft";src:url(data:font/otf;base64,/*FONT_B*/) format("opentype");font-weight:600 800}
+:root{
+  --bg:#0e0f13; --panel:#16181e; --row:#1c1f27; --row-on:#24324a; --line:#262a33;
+  --text:#e9ecf1; --dim:#8a92a3; --faint:#5b6273;
+  --ahead:#4cd07d; --behind:#ef5b5b; --gold:#f5c542; --blue:#6aa8ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
+body.obs{background:transparent}
+.split{max-width:440px;margin:24px auto;padding:0 16px}
+body.obs .split{margin:0;max-width:none;padding:0}
+.box{background:var(--panel);border:2px solid var(--line);border-radius:6px;overflow:hidden}
+body.obs .box{background:rgba(14,15,19,.82)}
+.head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:2px solid var(--line)}
+.head .t{font-weight:700;font-size:17px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.head .num{flex:1;color:var(--dim);font-size:14px;white-space:nowrap}
+.vs{border:0;background:var(--row);color:var(--text);font:inherit;font-size:13px;padding:4px 8px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.vs:hover{background:var(--row-on)}
+.vs b{color:var(--dim);font-weight:400}
+.rows{padding:4px 0}
+.r{display:grid;grid-template-columns:22px 1fr auto 76px;align-items:center;gap:8px;padding:5px 12px;min-height:32px}
+.r.on{background:var(--row-on)}
+.r img{width:20px;height:20px;image-rendering:pixelated}
+.r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r .d{text-align:right;min-width:58px}
+.r .tm{text-align:right}
+.r.todo .n,.r.todo .tm{color:var(--dim)}
+.r.wait .n{color:var(--text)}
+.ahead{color:var(--ahead)} .behind{color:var(--behind)} .gold{color:var(--gold)}
+.clock{padding:6px 12px 2px;text-align:right}
+.big{font-size:46px;font-weight:700;line-height:1;letter-spacing:1px;text-shadow:3px 3px 0 #000}
+.big.paused{color:var(--dim)}
+.seg{color:var(--dim);font-size:15px;margin-top:4px}
+.info{border-top:2px solid var(--line);margin-top:8px;padding:6px 12px 8px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:14px}
+.kv span:first-child{color:var(--dim)}
+.status{font-size:12px;color:var(--dim);white-space:nowrap}
+.status.live{color:var(--ahead)}
+.note{color:var(--dim);font-size:13px;padding:10px 12px;border-top:2px solid var(--line)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="split">
+  <div class="box">
+    <div class="head"><span class="t" id="title">AA Live</span><span class="num" id="num"></span><span class="status" id="status"></span><button class="vs" id="vs" title="Change what you're compared with"></button></div>
+    <div class="rows" id="rows"></div>
+    <div class="clock"><div class="big" id="timer">0:00:00</div><div class="seg" id="segTimer"></div></div>
+    <div class="info" id="info"></div>
+    <div class="note hide" id="note"></div>
+  </div>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+if (P.has("obs")) document.body.classList.add("obs");
+const ORDER = ["pb", "avg", "best", "worst", "wr"];
+const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
+let comp = P.get("comp") || store.get("aa-live-comp") || "pb";
+let S = null, connected = false;
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+// 1:02:03, or 2:03 under an hour
+const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(Math.max(0, ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0"); return h || long ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+const delta = ms => (ms < 0 ? "−" : "+") + fmt(Math.abs(ms));
+const cls = (ms, gold) => gold ? "gold" : ms <= 0 ? "ahead" : "behind";
+
+const es = new EventSource("/events");
+es.onmessage = e => { S = JSON.parse(e.data); connected = true; render(); };
+es.onerror = () => { connected = false; render(); };
+
+$("vs").onclick = () => {
+  if (!S) return;
+  const have = ORDER.filter(k => S.comps[k]);
+  comp = have[(have.indexOf(comp) + 1) % have.length] || "pb";
+  store.set("aa-live-comp", comp);
+  render();
+};
+
+// The IGT right now: from the latest line of the log, plus the time since then while the game is running
+function liveIgt() {
+  if (!S) return 0;
+  if (S.done || !S.anchor || !S.open || S.paused) return S.igt;
+  return Math.max(S.igt, S.anchor.igt + (Date.now() - S.anchor.wall));
+}
+
+function render() {
+  if (!S) { $("status").textContent = connected ? "" : "Not connected"; return; }
+  const C = S.comps[comp] || S.comps[ORDER.find(k => S.comps[k])] || null, best = S.comps.best;
+  const now = liveIgt(), running = S.open && !S.paused && !S.done;
+  $("title").textContent = S.title;
+  $("num").textContent = S.num ? "Run " + S.num : "";
+  $("vs").innerHTML = C ? `<b>vs</b> ${esc(C.short)}` : "No runs";
+  $("status").textContent = !connected ? "Not connected" : S.done ? (S.thunderless ? "Done · Thunderless" : "Done") : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "Live";
+  $("status").className = "status" + (running && connected ? " live" : "");
+
+  const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
+  const ri = rows.findIndex(r => r.from != null);
+  rows.forEach(r => { r.fin = S.done ? r.has : r.has && r.from == null && ri >= 0 && r.i < ri; r.on = r.i === ri; });
+  const c = i => C && C.splits[i] != null ? C.splits[i] : null, b = i => best && best.splits[i] != null ? best.splits[i] : null;
+
+  // (the rows are made once and then only changed, so the icons don't flicker)
+  const box = $("rows");
+  while (box.children.length < rows.length) box.insertAdjacentHTML("beforeend", `<div class="r"><img alt=""><span class="n"></span><span class="d"></span><span class="tm"></span></div>`);
+  while (box.children.length > rows.length) box.lastChild.remove();
+  rows.forEach((r, k) => {
+    let d = "", dc = "";
+    if (r.fin && c(r.i) != null) { const g = b(r.i) != null && r.cur < b(r.i); d = delta(r.cur - c(r.i)); dc = cls(r.cur - c(r.i), g); }
+    else if (r.on && c(r.i) != null && r.cur > c(r.i)) { d = delta(r.cur - c(r.i)); dc = "behind"; }
+    const shown = r.fin || r.on || r.has, el = box.children[k], [img, n, de, tm] = el.children;
+    const src = S.icons[r.icon] || "";
+    if (img.getAttribute("src") !== src) { if (src) img.setAttribute("src", src); else img.removeAttribute("src"); }
+    img.style.visibility = src ? "" : "hidden";
+    el.className = "r" + (r.on ? " on" : "") + (shown ? "" : " todo") + (r.has && !r.fin && !r.on ? " wait" : "");
+    n.textContent = r.name; de.textContent = d; de.className = "d " + dc; tm.textContent = fmt(shown ? r.cur : c(r.i));
+  });
+
+  // what's left, going by the comparison (pace) and by the best segments (best possible time)
+  const left = f => rows.filter(r => !r.fin).reduce((a, r) => a + Math.max(0, (f(r.i) ?? 0) - r.cur), 0);
+  const pace = C ? now + left(c) : null, possible = best ? now + left(b) : null;
+  const pb = S.comps.pb;
+  const t = $("timer");
+  t.textContent = fmt(now, true);
+  t.className = "big" + (S.done ? (pb && now < pb.final ? " gold" : C && C.final != null ? " " + cls(now - C.final) : "") : !running ? " paused" : C && C.final != null ? " " + cls(pace - C.final) : "");
+  const on = rows[ri];
+  $("segTimer").textContent = on ? `${on.name} ${fmt(on.cur)}` : "";
+
+  const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
+  const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
+  let info = "";
+  if (prev && c(prev.i) != null) info += kv("Previous segment", delta(prev.cur - c(prev.i)), cls(prev.cur - c(prev.i), b(prev.i) != null && prev.cur < b(prev.i)));
+  if (C && C.final != null && !S.done) info += kv(`Pace (vs ${esc(C.short)})`, fmt(pace, true) + ` <span class="${cls(pace - C.final)}">${delta(pace - C.final)}</span>`);
+  if (possible != null && !S.done) info += kv("Best possible time", fmt(possible, true));
+  if (best) info += kv("Sum of best", fmt(best.final, true));
+  if (pb) info += kv("Personal best", fmt(pb.final, true));
+  $("info").innerHTML = info;
+
+
+  const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
+  $("note").textContent = note; $("note").classList.toggle("hide", !note);
+}
+setInterval(render, 200);
+</script>
+</body>
+</html>
