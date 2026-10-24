@@ -50,7 +50,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .big{font-size:50px;font-weight:700;line-height:.86;font-variant-numeric:tabular-nums}
 .big .ms{font-size:30px}
 .big.paused{color:var(--dim)}
-.seg{color:var(--dim);font-size:30px;line-height:1;margin-top:-1px}
+.seg{color:var(--dim);font-size:30px;line-height:1;margin-top:-1px;min-height:1em}
 .seg .ms{font-size:20px}
 .info{margin-top:6px;padding:4px 12px 8px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-size:20px}
@@ -294,13 +294,15 @@ function render() {
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
+  // (all four always there, "—" until there's something, so the page is always the same height: for cropping in OBS)
   let info = "";
-  // the last split: against the comparison, and how much faster it's been done before (the time that could have been saved)
-  if (prev && c(prev.i) != null) { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
-    info += kv("Previous Segment", `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : "")); }
-  if (pace != null && !S.done) info += kv("Current Pace", fmt(pace, true));
-  if (possible != null && !S.done) info += kv("Best Possible Time", fmt(possible, true));
-  if (best) info += kv("Sum of Best Segments", fmt(best.final, true));
+  const prevSeg = prev && c(prev.i) != null ? (() => { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
+    return `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : ""); })() : "—";
+  info += kv("Previous Segment", prevSeg);
+  // (a finished run: its final time)
+  info += kv("Current Pace", S.done ? fmt(now, true) : pace != null ? fmt(pace, true) : "—");
+  info += kv("Best Possible Time", S.done ? fmt(now, true) : possible != null ? fmt(possible, true) : "—");
+  info += kv("Sum of Best Segments", best ? fmt(best.final, true) : "—");
   put($("info"), info);
 
   // (on this computer's browser: the link for a phone on the same Wi-Fi)
