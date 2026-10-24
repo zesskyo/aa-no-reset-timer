@@ -15,7 +15,7 @@ A live splitter for **AA No Reset** runs of Minecraft 1.16.1: all advancements i
 ## What you need
 
 - Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/Hermes) mod, and SpeedRunIGT.
-- **[Node.js](https://nodejs.org)** (the LTS one), installed once.
+- That's it: AA Live runs on [Node.js](https://nodejs.org), and if it isn't installed, AA Live downloads its own copy the first time it starts (about 30–45 MB, into its `app/node` folder, checked against nodejs.org's checksums; nothing is installed on the computer). If Node.js is installed, it uses that.
 - AA Live itself: **Code › Download ZIP** on this page, then unzip it somewhere.
 
 ## Starting it
@@ -26,7 +26,7 @@ A live splitter for **AA No Reset** runs of Minecraft 1.16.1: all advancements i
 
 **Mac:** double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose **Open**, then **Open** again.
 
-The splits open in your browser at <http://localhost:7476/>. Leave the window that opened running while you play; close it to stop AA Live. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world.
+The first time, if Node.js isn't installed, it downloads it first (a minute or so). Then the splits open in your browser at <http://localhost:7476/>. Leave the window that opened running while you play; close it to stop AA Live. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world.
 
 ## In OBS
 
