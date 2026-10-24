@@ -20,7 +20,7 @@ import { rotate } from "./rotator.mjs";
 // (gen.mjs puts these in)
 const SITE_CODE = /*SITE_CODE*/"";
 const PAGE = /*PAGE*/"";
-const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' items, 64 pixels
+const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' and the Midgame checklist's icons (see build.mjs)
 const VERSION = "0.1";
 
 // ---------- Settings ----------
@@ -133,7 +133,7 @@ function loadSite(data, fetchedAt) {
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
-  for (const [k, v] of Object.entries(ITEM_ICONS)) icons["item:" + k] = v;
+  Object.assign(icons, ITEM_ICONS);
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
   site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt};

@@ -32,7 +32,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .r.on{background:var(--on);color:#fff}
 /* sub-splits: indented under their split, without icons and a little shorter */
 .r.sub{padding-left:28px}
-.r.part{padding-left:72px;grid-template-columns:0 1fr auto 90px;color:var(--dim);min-height:28px}
+.r.part{padding-left:56px;color:var(--dim)}
 .r.blank{visibility:hidden}
 .d.prog{color:var(--dim)}
 .r.parent .n{font-weight:700}
@@ -190,7 +190,11 @@ function render() {
         if (on && !onSub) onSub = {mid: x.key, cur};
         out.push({cls: "sub" + (on ? " on" : ""), icon: "item:" + x.item, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
-        if (on && x.parts && x.parts.length > 1) for (const [n, h, k] of x.parts) out.push({cls: "sub part", icon: null, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
+        // (each with the icon of something missing in it, taking turns)
+        if (on && x.parts && x.parts.length > 1) for (const [n, h, k, icons] of x.parts) {
+          const ic = icons && icons.length ? icons[Math.floor(Date.now() / 1500) % icons.length] : null;
+          out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
+        }
       }
     }
     else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});

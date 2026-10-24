@@ -10,13 +10,20 @@ const SITE = ["text.js", "config.js", "helpers.js", "parse-log.js", "runs.js", "
 const { readPng, writePng, pickSquares } = await import(path.join(A, "png.mjs"));
 const { SUB_ITEMS, MIDGAME } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SUB_ITEMS, MIDGAME };")();
 const items = JSON.parse(rd(path.join(A, "items/items.json"))), atlas = readPng(fs.readFileSync(path.join(A, "items/atlas.png")));
+// (keys as the page uses them: "item:<item>", "item:icon:<name>" for the stats site's own icons, and the checklist's goals'
+// "at:<biome>", "mh:<mob>" and "2x2:<animal>", from the stats site's icon folders)
 const ITEM_ICONS = {};
-for (const id of new Set([...Object.values(SUB_ITEMS), ...MIDGAME.map(m => m.item)])) {
-  // ("icon:<name>": one of the stats site's own icons)
-  if (id.startsWith("icon:")) { ITEM_ICONS[id] = "data:image/png;base64," + fs.readFileSync(path.join(A, "icons", id.slice(5) + ".png")).toString("base64"); continue; }
+const png = f => "data:image/png;base64," + fs.readFileSync(f).toString("base64");
+const ADV_ITEMS = new Function(rd(path.join(A, "src/splits.js")) + "\nreturn ADV_ITEMS;")();
+const itemIds = new Set([...Object.values(SUB_ITEMS), ...MIDGAME.map(m => m.item), ...Object.values(ADV_ITEMS), "book", "cod",
+  ...MIDGAME.flatMap(m => (m.goals || []).filter(g => g[0] === "food").map(g => g[1][0]))]);
+for (const id of itemIds) {
+  if (id.startsWith("icon:")) { ITEM_ICONS["item:" + id] = png(path.join(A, "icons", id.slice(5) + ".png")); continue; }
   if (items.index[id] == null) throw new Error("items.json has no " + id);
-  ITEM_ICONS[id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
+  ITEM_ICONS["item:" + id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
 }
+for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunted"], ["2x2:", "two by two"]])
+  for (const f of fs.readdirSync(path.join(A, "icons", dir))) if (f.endsWith(".png")) ITEM_ICONS[prefix + f.slice(0, -4)] = png(path.join(A, "icons", dir, f));
 let page = rd(path.join(here, "src/page.html"));
 for (const [k, f] of [["/*FONT_R*/", "MinecraftRegular.otf"], ["/*FONT_B*/", "MinecraftBold.otf"]]) page = page.replace(k, () => fs.readFileSync(path.join(A, "fonts", f)).toString("base64"));
 let s = rd(path.join(here, "src/server.mjs"));
