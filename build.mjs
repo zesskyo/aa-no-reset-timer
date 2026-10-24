@@ -24,6 +24,8 @@ for (const id of itemIds) {
 }
 for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunted"], ["2x2:", "two by two"]])
   for (const f of fs.readdirSync(path.join(A, "icons", dir))) if (f.endsWith(".png")) ITEM_ICONS[prefix + f.slice(0, -4)] = png(path.join(A, "icons", dir, f));
+// (the icon files named after a biome's newer name: the game's 1.16 one is used in the checklist)
+ITEM_ICONS["at:snowy_tundra"] = ITEM_ICONS["at:snowy_plains"];
 let page = rd(path.join(here, "src/page.html"));
 for (const [k, f] of [["/*FONT_R*/", "MinecraftRegular.otf"], ["/*FONT_B*/", "MinecraftBold.otf"]]) page = page.replace(k, () => fs.readFileSync(path.join(A, "fonts", f)).toString("base64"));
 let s = rd(path.join(here, "src/server.mjs"));
