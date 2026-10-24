@@ -55,7 +55,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .info{margin-top:6px;padding:4px 12px 8px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-size:20px}
 .note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
-.hide{display:none}
+.hide{display:none!important}
 /* playing back a run (--replay): the slider and buttons */
 .replay{border-top:2px solid var(--line);padding:10px 12px;display:grid;gap:8px;font-size:20px}
 .rp-top{display:flex;justify-content:space-between;color:var(--dim)}
@@ -195,17 +195,19 @@ function render() {
   // (in its area, or being worked on now) is the blue one, with what's left of it under it. Under Post-endgame, what of
   // the checklist is still not done.
   const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
+  // (a checklist item's icon: an item, or one of the stats site's own, like "mh:zoglin")
+  const iconOf = it => it.includes(":") ? it : "item:" + it;
   const checklist = i => {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
     if (i === 3) {
       const shown = midgame.sections.filter(x => x.area.some(a => near.includes(a))
-        && (x.split ? x.end == null || (x.complete && S.igt - x.end < 60000) : x.key !== "debris" || x.have > 0));
+        && (x.split ? (x.end == null && x.done == null) || (x.complete && S.igt - x.end < 60000) : x.have > 0));
       // (the one it's on: a split counting time now, its area's first)
       const running = x => x.split && x.end == null && x.since != null;
       const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running) || null;
       for (const x of shown) {
-        if (!x.split) { out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: String(x.have)}); continue; }
+        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: String(x.have)}); continue; }
         const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
@@ -213,7 +215,7 @@ function render() {
         else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
         const on = x === focus;
         if (on && !onSub) onSub = {mid: x.key, cur};
-        out.push({cls: "sub" + (on ? " on" : ""), icon: "item:" + x.item, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        out.push({cls: "sub" + (on ? " on" : ""), icon: iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
         if (on && x.parts && x.parts.length > 1) for (const [n, h, k, icons] of x.parts) {
@@ -222,7 +224,7 @@ function render() {
         }
       }
     }
-    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
+    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
     return out;
   };
   const list = [];
