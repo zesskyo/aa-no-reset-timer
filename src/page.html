@@ -115,6 +115,9 @@ const colour = (d, gain, gold) => gold ? "gold" : d <= 0 ? (gain ? "ahead" : "ah
 // compressed, and the comparisons only come in some of them. The phone page has the icons itself.
 const RELAY = /*RELAY*/false, RELAY_ICONS = /*RELAY_ICONS*/{};
 let heard = 0, relayComps = null;
+// (the phone page: how far this device's clock is ahead of AA Live's computer's, from when messages were sent and got
+// here; the smallest seen, as that's the one that took least time on the way)
+let skew = null;
 const gunzip = async b64 => new Response(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
 const channel = RELAY ? decodeURIComponent(location.hash.slice(1)) : "";
 const NTFY = P.get("relay") || "https://ntfy.sh";   // (?relay=: another ntfy server, for testing)
@@ -125,6 +128,7 @@ if (es) es.onmessage = async e => {
     if (o.event !== "message" || !o.message) return;
     try { o = JSON.parse(await gunzip(o.message)); } catch { return; }
     if (o.comps) relayComps = o.comps;
+    if (o.sentAt) { const d = Date.now() - o.sentAt; if (skew == null || d < skew) skew = d; }
     if (!o.splits) { if (S) S.comps = relayComps; return; }
     o = {...o, comps: relayComps || {}, icons: RELAY_ICONS};
     heard = Date.now();
@@ -148,7 +152,7 @@ let shown = 0;
 function liveIgt() {
   if (!S) return 0;
   if (S.done || !S.anchor || !S.open || S.paused) return shown = S.igt;
-  const t = Math.max(S.igt, S.anchor.igt + (Date.now() - S.anchor.wall));
+  const t = Math.max(S.igt, S.anchor.igt + (Date.now() - (RELAY && skew != null ? skew : 0) - S.anchor.wall));
   return shown = t < shown && shown - t < 2000 ? shown : t;
 }
 // (only touches the page when something changed)
@@ -163,7 +167,7 @@ function render() {
   put($("pbT"), pb ? "PB: " + fmt(pb.final, true) : "");
   put($("wrT"), wr ? "WR: " + fmt(wr.final, true) : "");
   // (the phone page: nothing from AA Live for a while, though the game was running)
-  const quiet = RELAY && S.open && !S.paused && !S.done && Date.now() - heard > 300000;
+  const quiet = RELAY && S.open && !S.paused && !S.done && Date.now() - heard > 900000;
   $("status").textContent = !connected ? "Not connected" : quiet ? "No news from AA Live" : S.done ? "Done" : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
 
   const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));

@@ -6,10 +6,12 @@
  * on the stats site. The splits are shown on a page served here: open it in a browser, or add it to OBS as a
  * browser source.
  *
- * The splits can also be followed on a phone: they're sent to a private channel on ntfy.sh (a free message relay), which
- * a page on the stats site's GitHub Pages reads (see "The phone page" below).
+ * The page can also be opened on a phone on the same Wi-Fi (the links are printed when it starts). With --relay-phone,
+ * the splits also go to a private channel on ntfy.sh (a free message relay), read by a page on the stats site, for a
+ * phone anywhere (see "The phone page" below).
  *
- * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--no-phone]
+ * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--local-only]
+ *                         [--relay-phone]
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -32,6 +34,40 @@ const opt = name => { const i = args.indexOf("--" + name); return i >= 0 ? args[
 const DEFAULT_SITE = "https://zesskyo.github.io/aa-stats-no-reset-zesskyo-log/";
 const SITE = opt("site") || DEFAULT_SITE;
 const PORT = Number(opt("port") || 7476);
+// ---------- On a phone on the same Wi-Fi ----------
+// The page is served to the whole network (unless --local-only), at this computer's addresses there: Wi-Fi's first
+// (en0 on a Mac), and not ones a phone can't reach (VPNs, virtual machines, Docker, self-assigned 169.254.x.x ones).
+const LAN = !args.includes("--local-only");
+const lanLinks = () => {
+  if (!LAN) return [];
+  const out = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces()))
+    for (const a of list || []) {
+      if (a.family !== "IPv4" || a.internal || a.address.startsWith("169.254.")) continue;
+      if (/^(utun|tun|tap|bridge|docker|veth|vboxnet|vmnet|awdl|llw|lo|gif|stf|anpi|ap\d)/i.test(name)) continue;
+      out.push({name, url: `http://${a.address}:${PORT}/`, wifi: /^(en0|wl|wlan|wi-?fi)/i.test(name)});
+    }
+  return out.sort((a, b) => b.wifi - a.wifi);
+};
+// The macOS firewall: if it's on and blocking node, a phone can't connect. What it says, and how to let node through.
+function checkFirewall() {
+  if (!LAN || process.platform !== "darwin") return;
+  const fw = "/usr/libexec/ApplicationFirewall/socketfilterfw";
+  execFile(fw, ["--getglobalstate"], (e, out) => {
+    if (e || !/enabled/i.test(out) || /disabled/i.test(out)) return;
+    execFile(fw, ["--getblockall"], (e2, all) => {
+      if (!e2 && /enabled|block all/i.test(all) && !/disabled/i.test(all)) console.log("  The macOS firewall blocks all incoming connections, so a phone can't connect. Turn off \"Block all incoming connections\" in System Settings › Network › Firewall › Options.");
+    });
+    execFile(fw, ["--getappblocked", process.execPath], (e3, app) => {
+      const blocked = !e3 && /block/i.test(app) && !/permitted|allowed/i.test(app);
+      console.log(blocked
+        ? `  The macOS firewall is blocking node, so a phone can't connect. To allow it, paste this in Terminal (it asks for your password):\n    sudo ${fw} --add "${process.execPath}" --unblockapp "${process.execPath}"`
+        : `  (The macOS firewall is on. If your phone can't connect, allow "node" in System Settings › Network › Firewall › Options, or paste in Terminal:\n    sudo ${fw} --add "${process.execPath}" --unblockapp "${process.execPath}")`);
+    });
+  });
+}
+// (each device that opens the page from the network is shown once, so it's clear whether the phone gets here at all)
+const seenDevices = new Set();
 const WORLD = opt("world") ? path.resolve(opt("world")) : null;
 const home = os.homedir();
 // where Hermes keeps its list of running games (the same places as HermesCore.getGlobalPath)
@@ -221,7 +257,7 @@ function update() {
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, phone: phoneLink(), title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, phone: phoneLink() || (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -264,6 +300,8 @@ function compute() {
 // ---------- The page ----------
 const clients = new Set();
 const server = http.createServer((req, res) => {
+  const from = String(req.socket.remoteAddress || "").replace(/^::ffff:/, "");
+  if (from && from !== "127.0.0.1" && from !== "::1" && !seenDevices.has(from)) { seenDevices.add(from); log(`A device at ${from} opened the page`); }
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/events") {
     res.writeHead(200, {"content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "access-control-allow-origin": "*"});
@@ -278,21 +316,26 @@ const server = http.createServer((req, res) => {
   } else { res.writeHead(404); res.end(); }
 });
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
-server.listen(PORT, "127.0.0.1", () => {
-  const link = `http://localhost:${PORT}/`;
-  const phone = phoneLink();
-  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}` + (phone ? `\n  On your phone (anywhere):           ${phone}` : "") + `\n  Stats site:    ${SITE}\n`);
+server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
+  const link = `http://localhost:${PORT}/`, lan = lanLinks(), phone = phoneLink();
+  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}`
+    + (LAN ? lan.length ? `\n  On your phone (same Wi-Fi):          ` + lan.map(l => l.url + (lan.length > 1 ? ` (${l.name}${l.wifi ? ", Wi-Fi" : ""})` : "")).join("\n                                       ") : "\n  (No Wi-Fi address found: is this computer on a network?)" : "")
+    + (phone ? `\n  On your phone (anywhere):           ${phone}` : "") + `\n  Stats site:    ${SITE}\n`);
+  checkFirewall();
   if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
 });
 
 // ---------- The phone page ----------
 // What the page shows (all but the icons, which the phone page has itself) goes to a channel on ntfy.sh with a long
 // random name, kept in this program's folder; the phone page (the stats site's /live/ page) is opened with that name.
-// ntfy.sh takes messages of up to 4 KB, at most one every 5 seconds on average (and only so many a day), so it's sent
-// when something that's shown changes, at most every RELAY_GAP, and otherwise every RELAY_BEAT while the game runs; the
-// phone counts the time up itself in between. The comparisons are only sent now and then: the phone keeps them.
-const PHONE = !args.includes("--no-phone");
-const RELAY_GAP = 15000, RELAY_BEAT = 120000, RELAY_IDLE = 600000;
+// ntfy.sh takes messages of up to 4 KB, one every 5 seconds on average and 250 a day, so it's sent when something that's
+// shown changes: a split, sub-split or checklist split starting or ending, pausing, leaving the world… within RELAY_GAP;
+// counters (shells, beacon blocks…) at most every RELAY_SLOW; otherwise every RELAY_BEAT, to show it's still there.
+// Once the day's messages are nearly used up (RELAY_SPARE left), only those first changes, at most every RELAY_SLOW.
+// The phone counts the time up itself in between, with the time difference between its clock and this computer's taken
+// out (each message says when it was sent). The comparisons are only sent now and then: the phone keeps them.
+const PHONE = args.includes("--relay-phone");
+const RELAY_GAP = 5000, RELAY_SLOW = 45000, RELAY_BEAT = 600000, RELAY_DAY = 250, RELAY_SPARE = 30;
 const NTFY = opt("relay") || "https://ntfy.sh";   // (--relay: another ntfy server, for testing)
 const channel = (() => {
   const f = ownFile("phone.json"), j = readJson(f);
@@ -303,22 +346,28 @@ const channel = (() => {
 })();
 // (the stats site's /live/ page, when the stats site is a link)
 const phoneLink = () => PHONE && /^https?:\/\//i.test(SITE) ? SITE.replace(/\/?(index\.html)?$/i, "/") + "live/#" + channel : null;
-let sent = {at: 0, key: "", n: 0, comps: "", wait: 0};
+let sent = {at: 0, key: "", minor: "", n: 0, comps: "", wait: 0, day: "", today: 0};
 function relay(force) {
   if (!PHONE || !state) return;
   const {icons, ...rest} = state, now = Date.now();
-  // (what, when it changes, is worth sending straight away)
+  // (what's worth sending straight away when it changes; and what can wait a bit)
   const key = JSON.stringify([rest.world, rest.open, rest.paused, rest.done, rest.num, rest.splits.map(r => [r.has, r.from != null, (r.subs || []).filter(x => x.t != null).length,
-    r.mid ? [r.mid.area, r.mid.sections.map(x => [x.start != null, x.end != null, x.since != null, x.have])] : null])]);
-  const running = rest.open && !rest.paused && !rest.done;
-  const due = force || (key !== sent.key ? now - sent.at >= RELAY_GAP : now - sent.at >= (running ? RELAY_BEAT : RELAY_IDLE));
+    r.mid ? r.mid.sections.map(x => [x.start != null, x.end != null, x.since != null]) : null])]);
+  const minor = JSON.stringify(rest.splits.map(r => r.mid ? [r.mid.area, r.mid.sections.map(x => x.have)] : null));
+  const day = new Date(now).toISOString().slice(0, 10);
+  if (day !== sent.day) sent = {...sent, day, today: 0};
+  const left = RELAY_DAY - sent.today, since = now - sent.at;
+  const due = force || (left > RELAY_SPARE
+    ? (key !== sent.key && since >= RELAY_GAP) || (minor !== sent.minor && since >= RELAY_SLOW) || since >= RELAY_BEAT
+    : left > 0 && key !== sent.key && since >= RELAY_SLOW);
   if (!due || now < sent.wait) return;
   const pack = o => zlib.gzipSync(JSON.stringify(o), {level: 9}).toString("base64");
   const comps = JSON.stringify(rest.comps), withComps = comps !== sent.comps || sent.n % 10 === 0;
   let msgs = [pack({...rest, comps: withComps ? rest.comps : undefined, sentAt: now})];
   // (too big with the comparisons: they go on their own first)
   if (msgs[0].length > 4000) msgs = [...(withComps ? [pack({comps: rest.comps, sentAt: now})] : []), pack({...rest, comps: undefined, sentAt: now})];
-  sent = {...sent, at: now, key, n: sent.n + 1, comps: withComps ? comps : sent.comps};
+  sent = {...sent, at: now, key, minor, n: sent.n + 1, today: sent.today + msgs.length, comps: withComps ? comps : sent.comps};
+  if (sent.today >= RELAY_DAY - RELAY_SPARE && sent.today - msgs.length < RELAY_DAY - RELAY_SPARE) log("Nearly all of today's messages to the phone page are used: only splits are sent now");
   (async () => {
     for (const body of msgs) {
       try {
