@@ -106,6 +106,7 @@ const scale = parseFloat(P.get("scale"));
 // (a phone counts the page's own width as the window's, so its screen's width is used too)
 const fit = () => { const w = Math.min(innerWidth, screen.width || innerWidth); const z = Number.isFinite(scale) && scale > 0 ? scale : !window.obsstudio && w < 440 ? w / 440 : 1; document.querySelector(".split").style.zoom = z; };
 fit(); addEventListener("resize", fit);
+const cycleStore = new Map();   // (see cycle in render)
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
 let comp = P.get("comp") || store.get("aa-live-comp") || "pb";
@@ -197,6 +198,24 @@ function render() {
   const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
   // (a checklist item's icon: an item, or one of the stats site's own, like "mh:zoglin")
   const iconOf = it => it.includes(":") ? it : "item:" + it;
+  // Going through icons (what's still needed for a split), a new one every 1.5 seconds, in a random order that keeps
+  // going where it was when something's done or the page redraws
+  const cycles = cycleStore;
+  const cycle = (key, list) => {
+    let c = cycles.get(key);
+    if (!c) { c = {order: [], i: 0, at: Date.now()}; cycles.set(key, c); }
+    const want = new Set(list), now = Date.now();
+    c.order = c.order.filter(x => want.has(x));
+    for (const x of list) if (!c.order.includes(x)) c.order.splice(Math.floor(Math.random() * (c.order.length + 1)), 0, x);
+    if (now - c.at >= 1500) { c.i += Math.floor((now - c.at) / 1500); c.at = now; }
+    if (c.i >= c.order.length) {   // (round again: a new order, not starting on the one just shown)
+      const last = c.order[c.order.length - 1];
+      for (let k = c.order.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [c.order[k], c.order[j]] = [c.order[j], c.order[k]]; }
+      if (c.order.length > 1 && c.order[0] === last) c.order.push(c.order.shift());
+      c.i = 0;
+    }
+    return c.order[c.i];
+  };
   const checklist = i => {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
@@ -223,14 +242,14 @@ function render() {
         if (on && !onSub) onSub = {mid: x.key, cur};
         // (a misc split not finished: its icon goes through what's still needed for it, a few seconds each)
         const need = x.time === "active" && x.end == null ? (x.parts || []).flatMap(p => p[3] || []) : [];
-        const icon = need.length ? need[Math.floor(Date.now() / 1500) % need.length] : iconOf(x.item);
+        const icon = need.length ? cycle(x.key, need) : iconOf(x.item);
         out.push({cls: "sub" + (on ? " on" : ""), icon, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
         info();
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
         if (on && x.parts && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
-          const ic = icons && icons.length ? icons[Math.floor(Date.now() / 1500) % icons.length] : null;
+          const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
           out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
         }
       }
