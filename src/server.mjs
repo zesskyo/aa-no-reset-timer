@@ -79,6 +79,12 @@ function loadSite(data, fetchedAt) {
     if (!counts) return null;
     return [...Array(counts)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? (i ? comps[k].ends[i - 1] : 0) + pick[k](xs) : null; });
   });
+  // the Midgame checklist's splits: how long each took (time in its area), for the runs that finished it
+  const midOf = r => { const m = api.derive(r).splits[3].mid; const o = {}; if (m) for (const x of m.sections) if (x.split && x.complete) o[x.key] = x.dur; return o; };
+  if (comps.pb) comps.pb.mid = midOf(pb);
+  if (comps.wr) comps.wr.mid = midOf(wr);
+  const allMid = valid.map(midOf);
+  for (const k of ["avg", "best", "worst"]) if (comps[k]) { comps[k].mid = {}; for (const key of new Set(allMid.flatMap(o => Object.keys(o)))) { const xs = allMid.map(o => o[key]).filter(v => v != null); comps[k].mid[key] = pick[k](xs); } }
   // how long each step took: a real run's own; the average, fastest (gold) and slowest of all the runs
   const durOf = r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.dur) : null);
   if (comps.pb) comps.pb.subDurs = durOf(pb);
@@ -236,7 +242,7 @@ function compute() {
     const last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
     const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
     return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
-      start: s.start, subs: s.subs || null};
+      start: s.start, subs: s.subs || null, mid: s.mid || null};
   });
   // nothing running yet (e.g. still in Any%, or between splits): the first split with nothing in it, from the end of the one before
   if (!done0 && !rows.some(r => r.from != null)) {

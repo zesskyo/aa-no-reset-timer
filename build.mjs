@@ -6,12 +6,12 @@ const here = path.dirname(new URL(import.meta.url).pathname), A = path.resolve(p
 const rd = f => fs.readFileSync(f, "utf8");
 // the stats site's code the splitter uses (so it reads logs and works out splits exactly like the site)
 const SITE = ["text.js", "config.js", "helpers.js", "parse-log.js", "runs.js", "splits.js", "stats.js"].map(f => `/* ======== ${f} ======== */\n` + rd(path.join(A, "src", f))).join("\n");
-// the sub-splits' item icons (config.js' SUB_ITEMS), cut out of the stats site's item atlas
+// the item icons of the sub-splits and the Midgame checklist (config.js' SUB_ITEMS and MIDGAME), cut out of the stats site's item atlas
 const { readPng, writePng, pickSquares } = await import(path.join(A, "png.mjs"));
-const SUB_ITEMS = new Function(rd(path.join(A, "src/config.js")) + "\nreturn SUB_ITEMS;")();
+const { SUB_ITEMS, MIDGAME } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SUB_ITEMS, MIDGAME };")();
 const items = JSON.parse(rd(path.join(A, "items/items.json"))), atlas = readPng(fs.readFileSync(path.join(A, "items/atlas.png")));
 const ITEM_ICONS = {};
-for (const id of new Set(Object.values(SUB_ITEMS))) {
+for (const id of new Set([...Object.values(SUB_ITEMS), ...MIDGAME.map(m => m.item)])) {
   // ("icon:<name>": one of the stats site's own icons)
   if (id.startsWith("icon:")) { ITEM_ICONS[id] = "data:image/png;base64," + fs.readFileSync(path.join(A, "icons", id.slice(5) + ".png")).toString("base64"); continue; }
   if (items.index[id] == null) throw new Error("items.json has no " + id);

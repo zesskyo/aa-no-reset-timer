@@ -33,6 +33,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 /* sub-splits: indented under their split, without icons and a little shorter */
 .r.sub{padding-left:28px}
 .r.blank{visibility:hidden}
+.d.prog{color:var(--dim)}
 .r.parent .n{font-weight:700}
 /* (the icons are 32 pixels: shown at exactly that, so every texture pixel is the same size) */
 .r img{width:32px;height:32px;image-rendering:pixelated}
@@ -154,18 +155,49 @@ function render() {
   // how long a step took: the comparison's, and the fastest ever (gold)
   const cd = (i, j) => C && C.subDurs && C.subDurs[i] && C.subDurs[i][j] != null ? C.subDurs[i][j] : null;
   const bd = (i, j) => best && best.subDurs && best.subDurs[i] && best.subDurs[i][j] != null ? best.subDurs[i][j] : null;
-  let onSub = null;   // the step it's on: {name, cur, i, j}
+  let onSub = null;   // the step it's on: {cur, i, j}, or {cur, mid: key} for a Midgame checklist split
+  // the Midgame checklist's splits: the comparison's length, and the fastest
+  const mc = k => C && C.mid && C.mid[k] != null ? C.mid[k] : null, mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
+  // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site): its splits (running
+  // while they're in its area; shown for a minute after they finish), and its counters. Under Post-endgame, what of it is
+  // still not done.
+  const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
+  const checklist = i => {
+    if (!midgame) return [];
+    const out = [];
+    if (i === 3) for (const x of midgame.sections) {
+      const here = x.area.includes(midgame.area);
+      if (x.split) {
+        const running = x.start != null && x.end == null && x.since != null, cur = (x.dur || 0) + (running ? extra : 0);
+        if (!running && !(x.complete && here && S.igt - x.end < 60000)) continue;
+        const cmp = mc(x.key); let d, dc;
+        if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
+        else if (running && cmp != null && cur > cmp) { d = delta(cur - cmp); dc = "behind"; }
+        else { d = `${x.have}/${x.need}`; dc = "prog"; }
+        if (running && !onSub) onSub = {mid: x.key, cur};
+        out.push({cls: "sub" + (running ? " on" : ""), icon: "item:" + x.item, name: x.name, d, dc, tm: fmt(cur)});
+      } else if (here && (x.key === "godapple" || x.need == null || x.done == null)) {
+        // (the god apple: when it was got)
+        const tm = x.key === "godapple" ? (x.done != null ? fmt(x.done) : "—") : x.need == null ? String(x.have) : `${x.have}/${x.need}`;
+        out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm});
+      }
+    }
+    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
+    return out;
+  };
   const list = [];
   for (const r of rows) {
     if (r.i === rows.length - 1 && !r.has && !r.on) continue;
     let d = "", dc = "";
     if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
-    const open = r.on && r.subs && r.subs.length;
+    const more = r.on && !(r.subs && r.subs.length) && (r.i === 3 || r.i === rows.length - 1) ? checklist(r.i) : [];
+    const open = r.on && (r.subs && r.subs.length || more.length);
     // the split it's on: shown once it's behind (unless its sub-splits are showing that)
     if (r.d == null && r.on && !open && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
     // the time: when it ended, for a finished split; otherwise the comparison's
     list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon: r.icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
     if (!open) continue;
+    if (more.length) { list.push(...more); continue; }
     // its sub-splits: the next one not done yet is the one it's on
     let pd = prevD;
     const next = r.subs.findIndex(x => x.t == null);
@@ -181,9 +213,10 @@ function render() {
   }
   // Only ROWS of them at once, like LiveSplit: the one it's on with the next one under it, moving down as it goes
   // (empty rows keep the size the same)
+  // (with nothing running under the split it's on, that split goes near the top, with as much as fits under it)
   let at = list.findIndex(x => / on\b|^on\b/.test(x.cls));
-  if (at < 0) at = list.length - 1;
-  const from = Math.max(0, Math.min(at - (ROWS - 2), list.length - ROWS));
+  const parent = list.findIndex(x => x.cls === "parent");
+  const from = Math.max(0, Math.min(at >= 0 ? at - (ROWS - 2) : parent >= 0 ? parent - 1 : list.length, list.length - ROWS));
   const shownRows = list.slice(from, from + ROWS);
   while (shownRows.length < ROWS) shownRows.push({cls: "blank", icon: null, name: "", d: "", dc: "", tm: ""});
   // (the rows are made once and then only changed, so the icons don't flicker)
@@ -209,7 +242,8 @@ function render() {
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
   // the split it's on (or the step of it, when it has sub-splits): its time so far, and the comparison's and the best
   const segCur = onSub ? onSub.cur : on ? on.cur : null;
-  const segC = onSub ? cd(onSub.i, onSub.j) : on ? c(on.i) : null, segB = onSub ? bd(onSub.i, onSub.j) : on ? b(on.i) : null;
+  const segC = onSub ? (onSub.mid ? mc(onSub.mid) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
+  const segB = onSub ? (onSub.mid ? mb(onSub.mid) : bd(onSub.i, onSub.j)) : on ? b(on.i) : null;
   put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
   put($("segComp"), C && on && comp !== "best" ? `${esc(C.short)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
