@@ -53,7 +53,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .seg .ms{font-size:20px}
 .info{margin-top:6px;padding:4px 12px 8px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-size:20px}
-.note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line)}
+.note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
 .hide{display:none}
 </style>
 </head>
@@ -71,6 +71,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
     </div>
     <div class="info" id="info"></div>
     <div class="note hide" id="note"></div>
+    <div class="note hide" id="phone"></div>
   </div>
 </div>
 <script>
@@ -109,9 +110,28 @@ const delta = ms => (ms < 0 ? "−" : "+") + (Math.abs(ms) < 60000 ? (Math.floor
 // LiveSplit's colours: ahead or behind, and gaining or losing time in that split (gold: the best that split has been)
 const colour = (d, gain, gold) => gold ? "gold" : d <= 0 ? (gain ? "ahead" : "ahead-lose") : (gain ? "behind-gain" : "behind");
 
-const es = new EventSource("/events");
-es.onmessage = e => { S = JSON.parse(e.data); connected = true; render(); };
-es.onerror = () => { connected = false; render(); };
+// The splits come from AA Live on this computer; or, on the phone page (the stats site's /live/ page, made by build.mjs
+// with RELAY set), from its channel on ntfy.sh (the name after the # in the link), where it sends them now and then: they're
+// compressed, and the comparisons only come in some of them. The phone page has the icons itself.
+const RELAY = /*RELAY*/false, RELAY_ICONS = /*RELAY_ICONS*/{};
+let heard = 0, relayComps = null;
+const gunzip = async b64 => new Response(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+const channel = RELAY ? decodeURIComponent(location.hash.slice(1)) : "";
+const NTFY = P.get("relay") || "https://ntfy.sh";   // (?relay=: another ntfy server, for testing)
+const es = RELAY ? (channel ? new EventSource(`${NTFY}/${encodeURIComponent(channel)}/sse?since=1h`) : null) : new EventSource("/events");
+if (es) es.onmessage = async e => {
+  let o = JSON.parse(e.data);
+  if (RELAY) {
+    if (o.event !== "message" || !o.message) return;
+    try { o = JSON.parse(await gunzip(o.message)); } catch { return; }
+    if (o.comps) relayComps = o.comps;
+    if (!o.splits) { if (S) S.comps = relayComps; return; }
+    o = {...o, comps: relayComps || {}, icons: RELAY_ICONS};
+    heard = Date.now();
+  }
+  S = o; connected = true; render();
+};
+if (es) es.onerror = () => { connected = false; render(); };
 
 // clicking the comparison changes it
 $("segComp").onclick = () => {
@@ -135,14 +155,16 @@ function liveIgt() {
 const put = (el, html) => { if (el._h !== html) { el._h = html; el.innerHTML = html; } };
 
 function render() {
-  if (!S) { $("status").textContent = connected ? "" : "Not connected"; return; }
+  if (!S) { $("status").textContent = RELAY && !channel ? "No channel in the link" : RELAY ? "Waiting for AA Live" : connected ? "" : "Not connected"; return; }
   const C = S.comps[comp] || S.comps[ORDER.find(k => S.comps[k])] || null, best = S.comps.best, pb = S.comps.pb, wr = S.comps.wr;
   const now = liveIgt(), running = S.open && !S.paused && !S.done;
   put($("title"), esc(S.title));
   put($("num"), S.num ? "Run " + S.num : "");
   put($("pbT"), pb ? "PB: " + fmt(pb.final, true) : "");
   put($("wrT"), wr ? "WR: " + fmt(wr.final, true) : "");
-  $("status").textContent = !connected ? "Not connected" : S.done ? "Done" : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
+  // (the phone page: nothing from AA Live for a while, though the game was running)
+  const quiet = RELAY && S.open && !S.paused && !S.done && Date.now() - heard > 300000;
+  $("status").textContent = !connected ? "Not connected" : quiet ? "No news from AA Live" : S.done ? "Done" : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
 
   const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
   const ri = rows.findIndex(r => r.from != null);
@@ -264,6 +286,9 @@ function render() {
   if (best) info += kv("Sum of Best Segments", fmt(best.final, true));
   put($("info"), info);
 
+  // (on this computer's browser: the link for the phone page)
+  const ph = $("phone"), showPhone = !RELAY && !window.obsstudio && S.phone;
+  ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, `On your phone: <a href="${esc(S.phone)}" style="color:inherit">${esc(S.phone)}</a>`);
   const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
 }

@@ -6,13 +6,18 @@
  * on the stats site. The splits are shown on a page served here: open it in a browser, or add it to OBS as a
  * browser source.
  *
- * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open]
+ * The splits can also be followed on a phone: they're sent to a private channel on ntfy.sh (a free message relay), which
+ * a page on the stats site's GitHub Pages reads (see "The phone page" below).
+ *
+ * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--no-phone]
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { execFile } from "node:child_process";
+import zlib from "node:zlib";
+import crypto from "node:crypto";
 import { rotate } from "./rotator.mjs";
 
 // (gen.mjs puts these in)
@@ -209,13 +214,14 @@ let state = null;
 function update() {
   if (!site) return;
   state = compute();
+  relay();
   const msg = "data: " + JSON.stringify(state) + "\n\n";
   for (const c of clients) c.write(msg);
 }
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, phone: phoneLink(), title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -274,9 +280,56 @@ const server = http.createServer((req, res) => {
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
 server.listen(PORT, "127.0.0.1", () => {
   const link = `http://localhost:${PORT}/`;
-  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}\n  Stats site:    ${SITE}\n`);
+  const phone = phoneLink();
+  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}` + (phone ? `\n  On your phone (anywhere):           ${phone}` : "") + `\n  Stats site:    ${SITE}\n`);
   if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
 });
+
+// ---------- The phone page ----------
+// What the page shows (all but the icons, which the phone page has itself) goes to a channel on ntfy.sh with a long
+// random name, kept in this program's folder; the phone page (the stats site's /live/ page) is opened with that name.
+// ntfy.sh takes messages of up to 4 KB, at most one every 5 seconds on average (and only so many a day), so it's sent
+// when something that's shown changes, at most every RELAY_GAP, and otherwise every RELAY_BEAT while the game runs; the
+// phone counts the time up itself in between. The comparisons are only sent now and then: the phone keeps them.
+const PHONE = !args.includes("--no-phone");
+const RELAY_GAP = 15000, RELAY_BEAT = 120000, RELAY_IDLE = 600000;
+const NTFY = opt("relay") || "https://ntfy.sh";   // (--relay: another ntfy server, for testing)
+const channel = (() => {
+  const f = ownFile("phone.json"), j = readJson(f);
+  if (j && /^aalive-[a-z0-9]{20,}$/.test(j.channel || "")) return j.channel;
+  const c = "aalive-" + crypto.randomBytes(16).toString("hex");
+  fs.writeFileSync(f, JSON.stringify({channel: c}));
+  return c;
+})();
+// (the stats site's /live/ page, when the stats site is a link)
+const phoneLink = () => PHONE && /^https?:\/\//i.test(SITE) ? SITE.replace(/\/?(index\.html)?$/i, "/") + "live/#" + channel : null;
+let sent = {at: 0, key: "", n: 0, comps: "", wait: 0};
+function relay(force) {
+  if (!PHONE || !state) return;
+  const {icons, ...rest} = state, now = Date.now();
+  // (what, when it changes, is worth sending straight away)
+  const key = JSON.stringify([rest.world, rest.open, rest.paused, rest.done, rest.num, rest.splits.map(r => [r.has, r.from != null, (r.subs || []).filter(x => x.t != null).length,
+    r.mid ? [r.mid.area, r.mid.sections.map(x => [x.start != null, x.end != null, x.since != null, x.have])] : null])]);
+  const running = rest.open && !rest.paused && !rest.done;
+  const due = force || (key !== sent.key ? now - sent.at >= RELAY_GAP : now - sent.at >= (running ? RELAY_BEAT : RELAY_IDLE));
+  if (!due || now < sent.wait) return;
+  const pack = o => zlib.gzipSync(JSON.stringify(o), {level: 9}).toString("base64");
+  const comps = JSON.stringify(rest.comps), withComps = comps !== sent.comps || sent.n % 10 === 0;
+  let msgs = [pack({...rest, comps: withComps ? rest.comps : undefined, sentAt: now})];
+  // (too big with the comparisons: they go on their own first)
+  if (msgs[0].length > 4000) msgs = [...(withComps ? [pack({comps: rest.comps, sentAt: now})] : []), pack({...rest, comps: undefined, sentAt: now})];
+  sent = {...sent, at: now, key, n: sent.n + 1, comps: withComps ? comps : sent.comps};
+  (async () => {
+    for (const body of msgs) {
+      try {
+        const r = await fetch(NTFY + "/" + channel, {method: "POST", body});
+        if (r.status === 429) { sent.wait = Date.now() + 120000; sent.comps = ""; log("ntfy.sh says too many messages: the phone page waits 2 minutes"); return; }
+        if (!r.ok) log("Couldn't send to the phone page: HTTP " + r.status);
+      } catch (e) { sent.wait = Date.now() + 30000; sent.comps = ""; log("Couldn't send to the phone page: " + e.message); return; }
+    }
+  })();
+}
+setInterval(() => relay(), 5000);
 
 // ---------- Running ----------
 const fmt = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };

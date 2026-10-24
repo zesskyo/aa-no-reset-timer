@@ -26,6 +26,18 @@ put('import { rotate } from "./rotator.mjs";', "\n" + rot);
 put('/*SITE_CODE*/""', JSON.stringify(SITE));
 put('/*PAGE*/""', JSON.stringify(page));
 put('/*ITEM_ICONS*/{}', JSON.stringify(ITEM_ICONS));
+// the phone page (the stats site's /live/ page): the same page, reading AA Live's channel on ntfy.sh, with its icons in it
+const cfg = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SPLITS, LAST_ICON, FALLBACK_LAST_ICON };")();
+const RELAY_ICONS = {};
+for (const k of new Set([...cfg.SPLITS.map(x => x.icon), ...Object.values(cfg.LAST_ICON), cfg.FALLBACK_LAST_ICON])) {
+  const f = path.join(A, "icons", k + ".png");
+  if (k && fs.existsSync(f)) RELAY_ICONS[k] = "data:image/png;base64," + fs.readFileSync(f).toString("base64");
+}
+for (const [k, v] of Object.entries(ITEM_ICONS)) RELAY_ICONS["item:" + k] = v;
+const phonePage = page.replace("/*RELAY*/false", "true").replace("/*RELAY_ICONS*/{}", () => JSON.stringify(RELAY_ICONS)).replace("<title>AA Live</title>", "<title>AA Live (phone)</title>");
+fs.mkdirSync(path.join(here, "phone"), {recursive: true});
+fs.writeFileSync(path.join(here, "phone/index.html"), phonePage);
+console.log("wrote phone/index.html", (phonePage.length / 1024).toFixed(0) + " KB (it goes in the stats site's folder as live/index.html)");
 fs.mkdirSync(path.join(here, "app"), {recursive: true});
 fs.writeFileSync(path.join(here, "app/aa-live.mjs"), s);
 console.log("wrote app/aa-live.mjs", (s.length / 1024).toFixed(0) + " KB");
