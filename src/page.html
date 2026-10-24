@@ -207,10 +207,13 @@ function render() {
         .sort((a, b) => (b.time === "area") - (a.time === "area"));
       // (the one it's on: a split counting time now, its area's first)
       const running = x => x.split && x.end == null && x.since != null;
-      const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running) || null;
+      // (or, with none counting time now, the first not finished in the area they're in: a misc split between things done)
+      const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running)
+        || shown.find(x => x.split && x.end == null && x.area.includes(midgame.area)) || null;
       for (const x of shown) {
         // (not timed: what's left of it)
-        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: x.need == null ? String(x.have) : `${x.have}/${x.need}`}); continue; }
+        const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
+        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: x.need == null ? String(x.have) : `${x.have}/${x.need}`}); info(); continue; }
         const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
@@ -218,10 +221,15 @@ function render() {
         else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
         const on = x === focus;
         if (on && !onSub) onSub = {mid: x.key, cur};
-        out.push({cls: "sub" + (on ? " on" : ""), icon: iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        // (a misc split not finished: its icon goes through what's still needed for it, a few seconds each)
+        const need = x.time === "active" && x.end == null ? (x.parts || []).flatMap(p => p[3] || []) : [];
+        const icon = need.length ? need[Math.floor(Date.now() / 1500) % need.length] : iconOf(x.item);
+        out.push({cls: "sub" + (on ? " on" : ""), icon, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
-        if (on && x.parts && x.parts.length > 1) for (const [n, h, k, icons] of x.parts) {
+        info();
+        // (one group only too, when it has several things missing to go through: "Biomes 2/6")
+        if (on && x.parts && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
           const ic = icons && icons.length ? icons[Math.floor(Date.now() / 1500) % icons.length] : null;
           out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
         }
