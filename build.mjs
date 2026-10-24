@@ -12,6 +12,8 @@ const SUB_ITEMS = new Function(rd(path.join(A, "src/config.js")) + "\nreturn SUB
 const items = JSON.parse(rd(path.join(A, "items/items.json"))), atlas = readPng(fs.readFileSync(path.join(A, "items/atlas.png")));
 const ITEM_ICONS = {};
 for (const id of new Set(Object.values(SUB_ITEMS))) {
+  // ("icon:<name>": one of the stats site's own icons)
+  if (id.startsWith("icon:")) { ITEM_ICONS[id] = "data:image/png;base64," + fs.readFileSync(path.join(A, "icons", id.slice(5) + ".png")).toString("base64"); continue; }
   if (items.index[id] == null) throw new Error("items.json has no " + id);
   ITEM_ICONS[id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
 }
