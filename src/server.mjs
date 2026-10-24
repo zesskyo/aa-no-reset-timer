@@ -18,6 +18,7 @@ import { rotate } from "./rotator.mjs";
 // (gen.mjs puts these in)
 const SITE_CODE = /*SITE_CODE*/"";
 const PAGE = /*PAGE*/"";
+const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' items, 64 pixels
 const VERSION = "0.1";
 
 // ---------- Settings ----------
@@ -83,6 +84,7 @@ function loadSite(data, fetchedAt) {
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
+  for (const [k, v] of Object.entries(ITEM_ICONS)) icons["item:" + k] = v;
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
   site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt};
@@ -126,19 +128,18 @@ function findWorld() {
   } catch {}
   const last = readJson(ownFile("last.json")) || {};
   if (last.game) games.add(last.game);
-  let best = null;
-  for (const g of games) {
-    const st = readJson(path.join(g, "hermes", "state.json"));
-    if (!st) continue;
-    const w = st.world || st.last_world_joined;
-    if (!w || !w.path) continue;
-    const p = w.relative ? path.join(g, w.path) : w.path;
-    let t = 0; try { t = fs.statSync(path.join(g, "hermes", "state.json")).mtimeMs; } catch {}
-    const score = (st.world ? 1e15 : 0) + t;   // a world that's open now beats the last one played
-    if (!best || score > best.score) best = {p, g, score};
-  }
-  if (best) { if (best.g !== last.game || best.p !== last.world) fs.writeFileSync(ownFile("last.json"), JSON.stringify({game: best.g, world: best.p})); return best.p; }
-  return last.world || null;
+  // the game played most recently: the one whose state.json changed last (a game that crashed can leave its files behind)
+  let game = null, newest = -1;
+  for (const g of games) { let t = -1; try { t = fs.statSync(path.join(g, "hermes", "state.json")).mtimeMs; } catch {} if (t > newest) { newest = t; game = g; } }
+  const st = game && readJson(path.join(game, "hermes", "state.json"));
+  if (!st) return world || last.world || null;   // (it can be read while it's being written: try again next time)
+  // the world open now; with none open (in the menus, or while a new world is being made), stay on the one being
+  // followed, rather than going back to the last one played
+  const w = st.world || (world ? null : st.last_world_joined);
+  if (!w || !w.path) return world || last.world || null;
+  const p = w.relative ? path.join(game, w.path) : w.path;
+  if (game !== last.game || p !== last.world) fs.writeFileSync(ownFile("last.json"), JSON.stringify({game, world: p}));
+  return p;
 }
 
 // ---------- Following the play log ----------
