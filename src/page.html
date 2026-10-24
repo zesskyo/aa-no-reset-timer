@@ -32,6 +32,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .r.on{background:var(--on);color:#fff}
 /* sub-splits: indented under their split, without icons and a little shorter */
 .r.sub{padding-left:28px}
+.r.part{padding-left:72px;grid-template-columns:0 1fr auto 90px;color:var(--dim);min-height:28px}
 .r.blank{visibility:hidden}
 .d.prog{color:var(--dim)}
 .r.parent .n{font-weight:700}
@@ -164,28 +165,32 @@ function render() {
   let onSub = null;   // the step it's on: {cur, i, j}, or {cur, mid: key} for a Midgame checklist split
   // the Midgame checklist's splits: the comparison's length, and the fastest
   const mc = k => C && C.mid && C.mid[k] != null ? C.mid[k] : null, mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
-  // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site): its splits (running
-  // while they're in its area; shown for a minute after they finish), and its counters. Under Post-endgame, what of it is
-  // still not done.
+  // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site; places they left a
+  // few seconds ago still count): its splits (shown for a minute after they finish), and its counters. The split it's on
+  // (in its area, or being worked on now) is the blue one, with what's left of it under it. Under Post-endgame, what of
+  // the checklist is still not done.
   const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
   const checklist = i => {
     if (!midgame) return [];
-    const out = [];
-    if (i === 3) for (const x of midgame.sections) {
-      const here = x.area.includes(midgame.area);
-      if (x.split) {
-        const running = x.start != null && x.end == null && x.since != null, cur = (x.dur || 0) + (running ? extra : 0);
-        if (!running && !(x.complete && here && S.igt - x.end < 60000)) continue;
-        const cmp = mc(x.key); let d, dc;
+    const out = [], near = midgame.near || [midgame.area];
+    if (i === 3) {
+      const shown = midgame.sections.filter(x => x.area.some(a => near.includes(a))
+        && (x.split ? x.end == null || (x.complete && S.igt - x.end < 60000) : x.key !== "debris" || x.have > 0));
+      // (the one it's on: a split counting time now, its area's first)
+      const running = x => x.split && x.end == null && x.since != null;
+      const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running) || null;
+      for (const x of shown) {
+        if (!x.split) { out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: String(x.have)}); continue; }
+        const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
+        let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
-        else if (running && cmp != null && cur > cmp) { d = delta(cur - cmp); dc = "behind"; }
-        else { d = `${x.have}/${x.need}`; dc = "prog"; }
-        if (running && !onSub) onSub = {mid: x.key, cur};
-        out.push({cls: "sub" + (running ? " on" : ""), icon: "item:" + x.item, name: x.name, d, dc, tm: fmt(cur)});
-      } else if (here && (x.key === "godapple" || x.need == null || x.done == null)) {
-        // (the god apple: when it was got)
-        const tm = x.key === "godapple" ? (x.done != null ? fmt(x.done) : "—") : x.need == null ? String(x.have) : `${x.have}/${x.need}`;
-        out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm});
+        else if (x.end == null && cmp != null && cur > cmp) { d = delta(cur - cmp); dc = "behind"; }
+        else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
+        const on = x === focus;
+        if (on && !onSub) onSub = {mid: x.key, cur};
+        out.push({cls: "sub" + (on ? " on" : ""), icon: "item:" + x.item, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
+        if (on && x.parts && x.parts.length > 1) for (const [n, h, k] of x.parts) out.push({cls: "sub part", icon: null, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
       }
     }
     else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: "item:" + x.item, name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
@@ -222,7 +227,9 @@ function render() {
   // (with nothing running under the split it's on, that split goes near the top, with as much as fits under it)
   let at = list.findIndex(x => / on\b|^on\b/.test(x.cls));
   const parent = list.findIndex(x => x.cls === "parent");
-  const from = Math.max(0, Math.min(at >= 0 ? at - (ROWS - 2) : parent >= 0 ? parent - 1 : list.length, list.length - ROWS));
+  // (Midgame's checklist: from Midgame down, as much as fits, as long as the one it's on still shows)
+  let from = Math.max(0, Math.min(at >= 0 ? at - (ROWS - 2) : parent >= 0 ? parent - 1 : list.length, list.length - ROWS));
+  if (ri === 3 && parent >= 0) from = Math.max(0, Math.min(parent - 1, list.length - ROWS, at >= 0 ? at - 1 : Infinity));
   const shownRows = list.slice(from, from + ROWS);
   while (shownRows.length < ROWS) shownRows.push({cls: "blank", icon: null, name: "", d: "", dc: "", tm: ""});
   // (the rows are made once and then only changed, so the icons don't flicker)
