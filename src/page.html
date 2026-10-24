@@ -16,16 +16,19 @@
 button{-webkit-appearance:none;appearance:none}
 html,body{margin:0}
 html,body{background:transparent}
-body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
-.split{margin:0;width:400px}
+/* The Minecraft font is drawn on a grid of 1/10 of its size: text is only at sizes that are multiples of 10 (so its
+   pixels land on whole screen pixels and it stays sharp), with Minecraft's shadow, one of those pixels down and right */
+body,body *{text-shadow:.1em .1em 0 #000}
+body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:20px;line-height:1.25;-webkit-font-smoothing:none}
+.split{margin:0;width:440px}
 .box{overflow:hidden;background:rgba(0,0,0,var(--bg-alpha))}
 .head{padding:8px 12px 6px;border-bottom:2px solid var(--line);text-align:center}
-.t1{font-weight:700;font-size:18px;white-space:nowrap}
-.t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:14px}
+.t1{font-weight:700;font-size:20px;white-space:nowrap}
+.t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:20px}
 .t2 .num{text-align:right;white-space:nowrap}
-.t3{display:flex;justify-content:center;gap:28px;margin-top:4px;font-size:15px;white-space:nowrap}
+.t3{display:flex;justify-content:center;gap:28px;margin-top:2px;font-size:20px;white-space:nowrap}
 .rows{padding:2px 0}
-.r{display:grid;grid-template-columns:22px 1fr auto 84px;align-items:center;gap:8px;padding:4px 12px;min-height:30px}
+.r{display:grid;grid-template-columns:20px 1fr auto 90px;align-items:center;gap:8px;padding:4px 12px;min-height:30px}
 .r.on{background:var(--on);color:#fff}
 .r img{width:20px;height:20px;image-rendering:pixelated}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -34,17 +37,17 @@ body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-mon
 .ahead{color:#2ee86a} .ahead-lose{color:#8fe3a9} .behind-gain{color:#f08a80} .behind{color:#ff3b30} .gold{color:var(--gold)}
 .detail{display:flex;align-items:flex-end;gap:10px;padding:6px 12px 2px}
 .dl{flex:1;min-width:0;display:grid;gap:2px;padding-bottom:2px}
-.dc{font-size:14px;white-space:nowrap;cursor:pointer}
-.t2 .st{text-align:left;color:var(--dim);font-size:12px;white-space:nowrap}
+.dc{font-size:20px;white-space:nowrap;cursor:pointer}
+.t2 .st{text-align:left;color:var(--dim);font-size:20px;white-space:nowrap}
 .dr{text-align:right;white-space:nowrap}
-.big{font-size:48px;font-weight:700;line-height:.86;letter-spacing:1px;text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums}
-.big .ms{font-size:28px}
+.big{font-size:50px;font-weight:700;line-height:.86;font-variant-numeric:tabular-nums}
+.big .ms{font-size:30px}
 .big.paused{color:var(--dim)}
-.seg{color:var(--dim);font-size:22px;line-height:1;margin-top:-1px;text-shadow:2px 2px 0 #000}
-.seg .ms{font-size:15px}
+.seg{color:var(--dim);font-size:30px;line-height:1;margin-top:-1px}
+.seg .ms{font-size:20px}
 .info{margin-top:6px;padding:4px 12px 8px}
-.kv{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:15px}
-.note{color:var(--dim);font-size:13px;padding:10px 12px;border-top:2px solid var(--line)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-size:20px}
+.note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line)}
 .hide{display:none}
 </style>
 </head>
@@ -73,7 +76,7 @@ const P = new URLSearchParams(location.search);
 const bgParam = parseFloat(P.get("bg"));
 const bg = Number.isFinite(bgParam) ? Math.min(100, Math.max(0, bgParam)) : window.obsstudio ? 0 : 100;
 document.documentElement.style.setProperty("--bg-alpha", bg / 100);
-// ?scale=1.5 makes it all that much bigger (it's 400 pixels wide at 1)
+// ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1)
 const scale = parseFloat(P.get("scale"));
 if (Number.isFinite(scale) && scale > 0) document.querySelector(".split").style.zoom = scale;
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
