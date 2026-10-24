@@ -30,6 +30,10 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .rows{padding:2px 0}
 .r{display:grid;grid-template-columns:32px 1fr auto 90px;align-items:center;gap:8px;padding:1px 12px;min-height:34px}
 .r.on{background:var(--on);color:#fff}
+/* sub-splits: indented under their split, without icons and a little shorter */
+.r.sub{min-height:28px}
+.r.sub .n{padding-left:12px}
+.r.parent .n{font-weight:700}
 /* (the icons are 32 pixels: shown at exactly that, so every texture pixel is the same size) */
 .r img{width:32px;height:32px;image-rendering:pixelated}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -142,22 +146,43 @@ function render() {
   let prevD = 0;
   rows.forEach(r => { if (r.fin && ce(r.i) != null) { r.d = r.end - ce(r.i); r.gain = r.d <= prevD; prevD = r.d; } });
 
-  // (the rows are made once and then only changed, so the icons don't flicker)
-  const box = $("rows");
-  while (box.children.length < rows.length) box.insertAdjacentHTML("beforeend", `<div class="r"><img alt=""><span class="n"></span><span class="d"></span><span class="tm"></span></div>`);
-  while (box.children.length > rows.length) box.lastChild.remove();
-  rows.forEach((r, k) => {
+  // What's listed: each split; under the one it's on, its sub-splits (done whenever their step happens, in any order).
+  // Post-endgame only when the run has one.
+  const cs = (i, j) => C && C.subs && C.subs[i] && C.subs[i][j] != null ? C.subs[i][j] : null;
+  const bInto = (i, j) => best && best.subInto && best.subInto[i] && best.subInto[i][j] != null ? best.subInto[i][j] : null;
+  const list = [];
+  for (const r of rows) {
+    if (r.i === rows.length - 1 && !r.has && !r.on) continue;
     let d = "", dc = "";
     if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
-    // the split it's on: shown once it's behind
-    else if (r.on && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
+    const open = r.on && r.subs && r.subs.length;
+    // the split it's on: shown once it's behind (unless its sub-splits are showing that)
+    if (r.d == null && r.on && !open && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
+    // the time: when it ended, for a finished split; otherwise the comparison's
+    list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon: r.icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
+    if (!open) continue;
+    // its sub-splits: the next one not done yet is the one it's on
+    let pd = prevD;
+    const next = r.subs.findIndex(x => x.t == null);
+    r.subs.forEach((x, j) => {
+      const cmp = cs(r.i, j);
+      let sd = "", sc = "";
+      if (x.t != null && cmp != null) { const v = x.t - cmp, into = x.t - r.start; sd = delta(v); sc = colour(v, v <= pd, bInto(r.i, j) != null && into < bInto(r.i, j)); pd = v; }
+      else if (j === next && cmp != null && now > cmp) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
+      list.push({cls: "sub" + (j === next ? " on" : ""), icon: null, name: x.name, d: sd, dc: sc, tm: fmt(x.t != null ? x.t : cmp)});
+    });
+  }
+  // (the rows are made once and then only changed, so the icons don't flicker)
+  const box = $("rows");
+  while (box.children.length < list.length) box.insertAdjacentHTML("beforeend", `<div class="r"><img alt=""><span class="n"></span><span class="d"></span><span class="tm"></span></div>`);
+  while (box.children.length > list.length) box.lastChild.remove();
+  list.forEach((x, k) => {
     const el = box.children[k], [img, n, de, tm] = el.children;
-    const src = S.icons[r.icon] || "";
+    const src = x.icon && S.icons[x.icon] || "";
     if (img.getAttribute("src") !== src) { if (src) img.setAttribute("src", src); else img.removeAttribute("src"); }
     img.style.visibility = src ? "" : "hidden";
-    el.className = "r" + (r.on ? " on" : "");
-    // the time: when it ended, for a finished split; otherwise the comparison's
-    n.textContent = r.name; de.textContent = d; de.className = "d " + dc; tm.textContent = fmt(r.fin ? r.end : ce(r.i));
+    el.className = "r " + x.cls;
+    n.textContent = x.name; de.textContent = x.d; de.className = "d " + x.dc; tm.textContent = x.tm;
   });
 
   // what's left, going by the comparison (pace) and by the best segments (best possible time)

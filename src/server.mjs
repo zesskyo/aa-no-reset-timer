@@ -65,6 +65,21 @@ function loadSite(data, fetchedAt) {
   if (comps.pb) comps.pb.ends = endsOf(pb);
   if (comps.wr) comps.wr.ends = endsOf(wr);
   for (const k of ["avg", "best", "worst"]) if (comps[k]) comps[k].ends = sums(comps[k].splits);
+  // sub-splits: each comparison's time for each step, as a split time. A real run's own; for average, best and worst,
+  // the time into the split (the average, fastest or slowest of the runs that did that step) after the comparison's
+  // split start
+  const subsOf = r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t) : null);
+  if (comps.pb) comps.pb.subs = subsOf(pb);
+  if (comps.wr) comps.wr.subs = subsOf(wr);
+  const into = valid.map(r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t == null ? null : x.t - s.start) : null));
+  const pick = {avg: xs => xs.reduce((a, b) => a + b, 0) / xs.length, best: xs => Math.min(...xs), worst: xs => Math.max(...xs)};
+  for (const k of ["avg", "best", "worst"]) if (comps[k]) comps[k].subs = api.SPLITS.map((_, i) => {
+    const counts = Math.max(0, ...into.map(x => x[i] ? x[i].length : 0));
+    if (!counts) return null;
+    return [...Array(counts)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? (i ? comps[k].ends[i - 1] : 0) + pick[k](xs) : null; });
+  });
+  // the fastest each step has been reached into its split (for gold)
+  if (comps.best) comps.best.subInto = api.SPLITS.map((_, i) => { const n = Math.max(0, ...into.map(x => x[i] ? x[i].length : 0)); return n ? [...Array(n)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? Math.min(...xs) : null; }) : null; });
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
@@ -202,7 +217,7 @@ function compute() {
     // getting back there is shown as running)
     delete run._d;
     run.finalIgt = now;
-    run.dims.push([now, "o"]);
+    run.dims.push([now, "o", "live"]);   // ("live": the sub-splits leave it out)
   }
   const d = api.derive(run);
   const end = done0 ? run.finalIgt : now;
@@ -211,12 +226,13 @@ function compute() {
     const segs = s.segs.filter(g => g[1] > g[0]);
     const last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
     const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
-    return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null};
+    return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
+      start: s.start, subs: s.subs || null};
   });
   // nothing running yet (e.g. still in Any%, or between splits): the first split with nothing in it, from the end of the one before
   if (!done0 && !rows.some(r => r.from != null)) {
     const i = rows.findIndex(r => !r.has);
-    if (i >= 0) rows[i].from = i === 0 ? 0 : Math.max(0, ...rows.slice(0, i).filter(r => r.end != null).map(r => r.end));
+    if (i >= 0) rows[i].from = rows[i].start = i === 0 ? 0 : Math.max(0, ...rows.slice(0, i).filter(r => r.end != null).map(r => r.end));
   }
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
   const known = api.RUNS.find(r => r.start === run.start && r.player === run.player);
