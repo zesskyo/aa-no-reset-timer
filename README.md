@@ -17,7 +17,7 @@ The timer and splits are a web page served on your computer, so you can open it 
 
 **OBS:** add a Browser source with the URL `http://localhost:7476/`, width 440 and height 520 (the splitter is 440 pixels wide and about 520 high; with `?scale=`, multiply both).
 The background is see-through in OBS; `?bg=60` makes it 60% black (0 to 100, `?bg=100` for solid black).
-`?ms=0` hides the milliseconds. `?scale=1.5` makes it 1.5 times bigger.
+`?ms=` is how many decimals the timer shows: `?ms=1` for tenths, `?ms=2` for hundredths, `?ms=0` for none (3 without it). `?scale=1.5` makes it 1.5 times bigger.
 The comparison can be picked in the URL too: `?comp=pb` (`pb`, `avg`, `best`, `worst` or `wr`), e.g. `?bg=60&comp=avg`. In a browser, click "vs …" to switch.
 
 Options (after `node app/aa-live.mjs`):
