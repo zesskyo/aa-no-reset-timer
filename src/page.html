@@ -71,6 +71,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
     </div>
     <div class="info" id="info"></div>
     <div class="note hide" id="note"></div>
+    <div class="note hide" id="phone"></div>
   </div>
 </div>
 <script>
@@ -84,9 +85,14 @@ const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 6));
 const bgParam = parseFloat(P.get("bg"));
 const bg = Number.isFinite(bgParam) ? Math.min(100, Math.max(0, bgParam)) : window.obsstudio ? 0 : 100;
 document.documentElement.style.setProperty("--bg-alpha", bg / 100);
+// (in a browser, all of the page is black, past the end of the splits too)
+if (!window.obsstudio && !Number.isFinite(bgParam)) document.documentElement.style.background = "#000";
 // ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1)
+// (without it, in a browser narrower than that, a phone say, it's made to fit)
 const scale = parseFloat(P.get("scale"));
-if (Number.isFinite(scale) && scale > 0) document.querySelector(".split").style.zoom = scale;
+// (a phone counts the page's own width as the window's, so its screen's width is used too)
+const fit = () => { const w = Math.min(innerWidth, screen.width || innerWidth); const z = Number.isFinite(scale) && scale > 0 ? scale : !window.obsstudio && w < 440 ? w / 440 : 1; document.querySelector(".split").style.zoom = z; };
+fit(); addEventListener("resize", fit);
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
 let comp = P.get("comp") || store.get("aa-live-comp") || "pb";
@@ -259,6 +265,9 @@ function render() {
   if (best) info += kv("Sum of Best Segments", fmt(best.final, true));
   put($("info"), info);
 
+  // (on this computer's browser: the link for a phone)
+  const ph = $("phone"), showPhone = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && S.phone && S.phone.length;
+  ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, "On your phone (same Wi-Fi): " + S.phone.map(u => `<b>${esc(u)}</b>`).join(" or "));
   const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
 }
