@@ -228,7 +228,8 @@ function watchLine(line) {
   if (!line.startsWith('{"time":')) return;
   const wall = parseInt(line.slice(8), 10), gi = line.lastIndexOf('"igt":');
   const q = line.indexOf('"type":"'), type = q > 0 ? line.slice(q + 8, line.indexOf('"', q + 8)) : "";
-  if (gi > 0) { const igt = parseInt(line.slice(gi + 6), 10); if (!anchor || igt >= anchor.igt) anchor = {igt, wall}; }
+  // (always the latest line: a new world's first lines still have the last world's time, until SpeedRunIGT resets)
+  if (gi > 0) anchor = {igt: parseInt(line.slice(gi + 6), 10), wall};
   if (type === "initialize") { open = true; paused = false; }
   else if (type === "close" || type === "server_shutdown") { open = false; paused = true; }
   else if (type === "screen") paused = line.includes('"is_pause":true');
