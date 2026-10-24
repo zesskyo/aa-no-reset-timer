@@ -28,9 +28,10 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .t2 .num{text-align:right;white-space:nowrap}
 .t3{display:flex;justify-content:center;gap:28px;margin-top:2px;font-size:20px;white-space:nowrap}
 .rows{padding:2px 0}
-.r{display:grid;grid-template-columns:20px 1fr auto 90px;align-items:center;gap:8px;padding:4px 12px;min-height:30px}
+.r{display:grid;grid-template-columns:32px 1fr auto 90px;align-items:center;gap:8px;padding:1px 12px;min-height:34px}
 .r.on{background:var(--on);color:#fff}
-.r img{width:20px;height:20px;image-rendering:pixelated}
+/* (the icons are 32 pixels: shown at exactly that, so every texture pixel is the same size) */
+.r img{width:32px;height:32px;image-rendering:pixelated}
 .r .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .r .d{text-align:right;min-width:58px}
 .r .tm{text-align:right}
