@@ -13,6 +13,8 @@ The timer and splits are a web page served on your computer, so you can open it 
 3. Double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose Open, then Open again.
 4. The splits open in your browser at <http://localhost:7476/>. To stop it, close its Terminal window.
 
+**Playing back a run:** double-click **app/Replay a run.command** and type a run's number on the stats site (like `27`), or drag a play.log onto its window. The splits page then plays that run instead of following Minecraft, with a slider to go to any point in it and buttons to play, pause and set the speed (1× to 1200×): everything (splits, sub-splits, the Midgame checklist, the comparisons) behaves as it would live. Or `node app/aa-live.mjs --replay 27`.
+
 **On your phone:** with your phone on the same Wi-Fi, open the link AA Live prints in its Terminal window ("On your phone (same Wi-Fi)"), like `http://192.168.1.20:7476/`; it's also shown under the splits in your browser. When the phone opens it, the Terminal window says "A device at … opened the page". If the phone can't connect:
 - the macOS firewall may be blocking node: AA Live says so when it starts, with a command to allow it;
 - if several addresses are printed, try each (the Wi-Fi one is first);
@@ -35,6 +37,7 @@ Options (after `node app/aa-live.mjs`):
 | `--world <folder>` | a world folder to follow, instead of finding it through Hermes |
 | `--no-open` | don't open the browser |
 | `--local-only` | only this computer can open the page (not a phone on the same Wi-Fi) |
+| `--replay <run>` | play back a run: its number on the stats site, or a play.log |
 
 ## How it works
 

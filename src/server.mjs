@@ -8,7 +8,11 @@
  *
  * The page can also be opened on a phone on the same Wi-Fi (the links are printed when it starts).
  *
+ * --replay plays back a run that's already done instead (a run number from the stats site, or a play.log), with a slider
+ * on the page to go to any point in it: to see how the splits behave.
+ *
  * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--local-only]
+ *                         [--replay <run number or play.log>]
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -192,7 +196,7 @@ function findWorld() {
 }
 
 // ---------- Following the play log ----------
-let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", plain = false;
+let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", plain = false, lastParse = 0;
 let anchor = null;      // {igt, wall}: the IGT at the latest line, and when that was
 let paused = true, open = false, changed = false;
 
@@ -202,6 +206,7 @@ function reset(w) {
 }
 
 function readNew() {
+  if (REPLAY) return replayTick();
   const w = findWorld();
   if (w !== world) reset(w);
   if (!world) return;
@@ -240,6 +245,68 @@ function watchLine(line) {
   else if (type === "screen") paused = line.includes('"is_pause":true');
 }
 
+// ---------- Playing back a run ----------
+// The run's log is read up to the point it's at (t, its IGT); that point moves on while it plays, at its speed. The page
+// counts the time up the same way (rate), and the slider and buttons on it move it (/replay).
+const REPLAY = opt("replay");
+let replay = null;   // {name, full, igts, offsets, total, t, playing, speed, at}
+async function loadReplay() {
+  let raw, name = REPLAY;
+  if (/^\d+$/.test(REPLAY)) {
+    // a run number: its log, from the stats site's repository on GitHub (https://<owner>.github.io/<repo>/ → logs/<n>.log)
+    const m = /^https:\/\/([^./]+)\.github\.io\/([^/]+)/i.exec(SITE);
+    if (!m) throw new Error("--replay with a run number needs a stats site on GitHub Pages (--site)");
+    const url = `https://raw.githubusercontent.com/${m[1]}/${m[2]}/main/logs/${REPLAY}.log`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`run ${REPLAY} has no log on the stats site (${url}: HTTP ${res.status})`);
+    raw = Buffer.from(await res.arrayBuffer()); name = "Run " + REPLAY;
+  } else {
+    raw = fs.readFileSync(path.resolve(REPLAY.replace(/^~(?=\/)/, home)));
+    // (a live log still ciphered: unciphered line by line)
+    if (REPLAY.endsWith(".enc")) { let s = 0; for (let i = 0; i <= raw.length; i++) if (i === raw.length || raw[i] === 10) { rotate(raw.subarray(s, i)); s = i + 1; } }
+    name = path.basename(REPLAY);
+  }
+  const full = raw.toString("utf8").replace(/"igt":\d+,"retime":(\d+)/g, '"igt":$1,"retime":$1');
+  const igts = [], offsets = [];
+  let pos = 0, last = 0;
+  for (const line of full.split("\n")) {
+    pos += line.length + 1;
+    const gi = line.lastIndexOf('"igt":');
+    if (gi > 0) last = Math.max(last, parseInt(line.slice(gi + 6), 10) || 0);
+    igts.push(last); offsets.push(pos);
+  }
+  replay = {name, full, igts, offsets, total: last, t: 0, playing: false, speed: 60, at: Date.now()};
+  world = name; file = name; open = true;
+  log(`Playing back ${name} (${fmt(last)} long): use the slider on the page`);
+  setReplay({});
+}
+// moves it: {t, playing, speed}
+function setReplay(o) {
+  if (!replay) return;
+  replayTick();
+  if (o.t != null) replay.t = Math.max(0, Math.min(replay.total, o.t));
+  if (o.playing != null) replay.playing = o.playing && replay.t < replay.total;
+  if (o.speed != null) replay.speed = Math.max(1, Math.min(3600, o.speed));
+  replayTick(true);
+}
+function replayTick(force) {
+  if (!replay) return;
+  const now = Date.now();
+  if (replay.playing) { replay.t = Math.min(replay.total, replay.t + (now - replay.at) * replay.speed); if (replay.t >= replay.total) replay.playing = false; }
+  replay.at = now;
+  // the log up to there (the lines with an IGT up to t)
+  let lo = 0, hi = replay.igts.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (replay.igts[mid] <= replay.t) lo = mid + 1; else hi = mid; }
+  const upTo = lo ? replay.offsets[lo - 1] : 0;
+  if (force || replay.playing || upTo !== text.length) {
+    text = replay.full.slice(0, upTo);
+    anchor = {igt: replay.t, wall: now};
+    paused = !replay.playing; open = true;
+    changed = true;
+    if (force) lastParse = 0;
+  }
+}
+
 // ---------- The splits ----------
 let state = null;
 function update() {
@@ -251,7 +318,8 @@ function update() {
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
+    rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -303,6 +371,10 @@ const server = http.createServer((req, res) => {
     if (state) res.write("data: " + JSON.stringify(state) + "\n\n");
     clients.add(res);
     req.on("close", () => clients.delete(res));
+  } else if (url.pathname === "/replay" && replay) {
+    const q = url.searchParams, num = k => q.has(k) && Number.isFinite(+q.get(k)) ? +q.get(k) : null;
+    setReplay({t: num("t"), playing: q.has("play") ? q.get("play") === "1" : null, speed: num("speed")});
+    res.writeHead(204); res.end();
   } else if (url.pathname === "/state.json") {
     res.writeHead(200, {"content-type": "application/json"}); res.end(JSON.stringify(state));
   } else if (url.pathname === "/") {
@@ -323,8 +395,8 @@ server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
 const fmt = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 reset(null);
 fetchSite();
+if (REPLAY) loadReplay().catch(e => { console.error("Couldn't play back " + REPLAY + ": " + e.message); process.exit(1); });
 setInterval(fetchSite, 30 * 60000);
-let lastParse = 0;
 setInterval(() => {
   try { readNew(); } catch (e) { log("Couldn't read the play log: " + e.message); }
   // the splits are worked out again at most once a second (the whole log is read each time)
