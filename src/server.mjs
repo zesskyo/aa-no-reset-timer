@@ -6,20 +6,15 @@
  * on the stats site. The splits are shown on a page served here: open it in a browser, or add it to OBS as a
  * browser source.
  *
- * The page can also be opened on a phone on the same Wi-Fi (the links are printed when it starts). With --relay-phone,
- * the splits also go to a private channel on ntfy.sh (a free message relay), read by a page on the stats site, for a
- * phone anywhere (see "The phone page" below).
+ * The page can also be opened on a phone on the same Wi-Fi (the links are printed when it starts).
  *
  * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--local-only]
- *                         [--relay-phone]
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { execFile } from "node:child_process";
-import zlib from "node:zlib";
-import crypto from "node:crypto";
 import { rotate } from "./rotator.mjs";
 
 // (gen.mjs puts these in)
@@ -250,14 +245,13 @@ let state = null;
 function update() {
   if (!site) return;
   state = compute();
-  relay();
   const msg = "data: " + JSON.stringify(state) + "\n\n";
   for (const c of clients) c.write(msg);
 }
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, phone: phoneLink() || (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -317,68 +311,13 @@ const server = http.createServer((req, res) => {
 });
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
 server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
-  const link = `http://localhost:${PORT}/`, lan = lanLinks(), phone = phoneLink();
+  const link = `http://localhost:${PORT}/`, lan = lanLinks();
   console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}`
     + (LAN ? lan.length ? `\n  On your phone (same Wi-Fi):          ` + lan.map(l => l.url + (lan.length > 1 ? ` (${l.name}${l.wifi ? ", Wi-Fi" : ""})` : "")).join("\n                                       ") : "\n  (No Wi-Fi address found: is this computer on a network?)" : "")
-    + (phone ? `\n  On your phone (anywhere):           ${phone}` : "") + `\n  Stats site:    ${SITE}\n`);
+    + `\n  Stats site:    ${SITE}\n`);
   checkFirewall();
   if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
 });
-
-// ---------- The phone page ----------
-// What the page shows (all but the icons, which the phone page has itself) goes to a channel on ntfy.sh with a long
-// random name, kept in this program's folder; the phone page (the stats site's /live/ page) is opened with that name.
-// ntfy.sh takes messages of up to 4 KB, one every 5 seconds on average and 250 a day, so it's sent when something that's
-// shown changes: a split, sub-split or checklist split starting or ending, pausing, leaving the world… within RELAY_GAP;
-// counters (shells, beacon blocks…) at most every RELAY_SLOW; otherwise every RELAY_BEAT, to show it's still there.
-// Once the day's messages are nearly used up (RELAY_SPARE left), only those first changes, at most every RELAY_SLOW.
-// The phone counts the time up itself in between, with the time difference between its clock and this computer's taken
-// out (each message says when it was sent). The comparisons are only sent now and then: the phone keeps them.
-const PHONE = args.includes("--relay-phone");
-const RELAY_GAP = 5000, RELAY_SLOW = 45000, RELAY_BEAT = 600000, RELAY_DAY = 250, RELAY_SPARE = 30;
-const NTFY = opt("relay") || "https://ntfy.sh";   // (--relay: another ntfy server, for testing)
-const channel = (() => {
-  const f = ownFile("phone.json"), j = readJson(f);
-  if (j && /^aalive-[a-z0-9]{20,}$/.test(j.channel || "")) return j.channel;
-  const c = "aalive-" + crypto.randomBytes(16).toString("hex");
-  fs.writeFileSync(f, JSON.stringify({channel: c}));
-  return c;
-})();
-// (the stats site's /live/ page, when the stats site is a link)
-const phoneLink = () => PHONE && /^https?:\/\//i.test(SITE) ? SITE.replace(/\/?(index\.html)?$/i, "/") + "live/#" + channel : null;
-let sent = {at: 0, key: "", minor: "", n: 0, comps: "", wait: 0, day: "", today: 0};
-function relay(force) {
-  if (!PHONE || !state) return;
-  const {icons, ...rest} = state, now = Date.now();
-  // (what's worth sending straight away when it changes; and what can wait a bit)
-  const key = JSON.stringify([rest.world, rest.open, rest.paused, rest.done, rest.num, rest.splits.map(r => [r.has, r.from != null, (r.subs || []).filter(x => x.t != null).length,
-    r.mid ? r.mid.sections.map(x => [x.start != null, x.end != null, x.since != null]) : null])]);
-  const minor = JSON.stringify(rest.splits.map(r => r.mid ? [r.mid.area, r.mid.sections.map(x => x.have)] : null));
-  const day = new Date(now).toISOString().slice(0, 10);
-  if (day !== sent.day) sent = {...sent, day, today: 0};
-  const left = RELAY_DAY - sent.today, since = now - sent.at;
-  const due = force || (left > RELAY_SPARE
-    ? (key !== sent.key && since >= RELAY_GAP) || (minor !== sent.minor && since >= RELAY_SLOW) || since >= RELAY_BEAT
-    : left > 0 && key !== sent.key && since >= RELAY_SLOW);
-  if (!due || now < sent.wait) return;
-  const pack = o => zlib.gzipSync(JSON.stringify(o), {level: 9}).toString("base64");
-  const comps = JSON.stringify(rest.comps), withComps = comps !== sent.comps || sent.n % 10 === 0;
-  let msgs = [pack({...rest, comps: withComps ? rest.comps : undefined, sentAt: now})];
-  // (too big with the comparisons: they go on their own first)
-  if (msgs[0].length > 4000) msgs = [...(withComps ? [pack({comps: rest.comps, sentAt: now})] : []), pack({...rest, comps: undefined, sentAt: now})];
-  sent = {...sent, at: now, key, minor, n: sent.n + 1, today: sent.today + msgs.length, comps: withComps ? comps : sent.comps};
-  if (sent.today >= RELAY_DAY - RELAY_SPARE && sent.today - msgs.length < RELAY_DAY - RELAY_SPARE) log("Nearly all of today's messages to the phone page are used: only splits are sent now");
-  (async () => {
-    for (const body of msgs) {
-      try {
-        const r = await fetch(NTFY + "/" + channel, {method: "POST", body});
-        if (r.status === 429) { sent.wait = Date.now() + 120000; sent.comps = ""; log("ntfy.sh says too many messages: the phone page waits 2 minutes"); return; }
-        if (!r.ok) log("Couldn't send to the phone page: HTTP " + r.status);
-      } catch (e) { sent.wait = Date.now() + 30000; sent.comps = ""; log("Couldn't send to the phone page: " + e.message); return; }
-    }
-  })();
-}
-setInterval(() => relay(), 5000);
 
 // ---------- Running ----------
 const fmt = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };

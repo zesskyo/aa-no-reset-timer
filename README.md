@@ -16,9 +16,7 @@ The timer and splits are a web page served on your computer, so you can open it 
 **On your phone:** with your phone on the same Wi-Fi, open the link AA Live prints in its Terminal window ("On your phone (same Wi-Fi)"), like `http://192.168.1.20:7476/`; it's also shown under the splits in your browser. When the phone opens it, the Terminal window says "A device at … opened the page". If the phone can't connect:
 - the macOS firewall may be blocking node: AA Live says so when it starts, with a command to allow it;
 - if several addresses are printed, try each (the Wi-Fi one is first);
-- some routers keep Wi-Fi devices apart (guest networks, "AP isolation"): then try the phone's hotspot, or `--relay-phone`.
-
-`--relay-phone` also sends the splits to a private channel on [ntfy.sh](https://ntfy.sh) (a free message relay), read by a page on the stats site, for a phone on any network: the link is printed as "On your phone (anywhere)" (keep it to yourself). ntfy.sh allows 250 messages a day, so splits are sent within 5 seconds and the rest less often; the phone counts the time up itself in between. That page is `phone/index.html` here, copied into the stats site's folder as `live/index.html`.
+- some routers keep Wi-Fi devices apart (guest networks, "AP isolation"): then try the phone's hotspot.
 
 **Updating:** download the repo again and replace your folder with it (or `git pull`, if you cloned it), then close AA Live's Terminal window and start it again. In OBS, right-click the browser source › Refresh (or press "Refresh cache of current page" in its properties); in a browser, reload the page.
 
@@ -37,7 +35,6 @@ Options (after `node app/aa-live.mjs`):
 | `--world <folder>` | a world folder to follow, instead of finding it through Hermes |
 | `--no-open` | don't open the browser |
 | `--local-only` | only this computer can open the page (not a phone on the same Wi-Fi) |
-| `--relay-phone` | also send the splits to the phone page on the stats site, through ntfy.sh |
 
 ## How it works
 
@@ -53,6 +50,5 @@ Options (after `node app/aa-live.mjs`):
 - `src/server.mjs` finds the world, follows the log, works out the splits and serves the page.
 - `src/page.html` is the timer and splits page.
 - `src/rotator.mjs` deciphers the live log.
-- `phone/index.html` (made by `build.mjs`) is the phone page, for the stats site's `live/` folder.
 - `build.mjs` puts it all into one file, `app/aa-live.mjs`, with the stats site's code and the Minecraft font: `node build.mjs <aa-stats folder>`. It needs a copy of [aa-stats](https://github.com/zesskyo/aa-stats).
 - `test/fake.mjs` pretends to be Minecraft for testing: `node test/fake.mjs <a play.log> <minutes>`, then `HOME=test/home node app/aa-live.mjs`.
