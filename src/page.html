@@ -91,8 +91,8 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 "use strict";
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
-// how many splits and sub-splits are listed at once: ?rows= (6 without it)
-const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 6));
+// how many splits and sub-splits are listed at once: ?rows= (8 without it)
+const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
 // the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
 // browser tab (where there's nothing behind the page)
 const bgParam = parseFloat(P.get("bg"));
@@ -220,15 +220,19 @@ function render() {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
     if (i === 3) {
-      // (splits timed by the time spent in their area first: in the Nether, Skulls and Uneasy Alliance)
-      const shown = midgame.sections.filter(x => x.area.some(a => near.includes(a))
-        && (x.split ? (x.end == null && x.done == null) || (x.complete && S.igt - x.end < 60000) : x.need == null ? x.have > 0 : x.done == null))
-        .sort((a, b) => (b.time === "area") - (a.time === "area"));
-      // (the one it's on: a split counting time now, its area's first)
+      // (a split that's just finished shows for a minute, wherever they are, so its final time can be seen; Debris is
+      // under the Debris split)
+      const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
+      const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
+      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || x.area.some(a => near.includes(a))
+        && (x.split ? x.end == null && (x.done == null || x.start != null) : x.need == null ? x.have > 0 : x.done == null)));   // (done, and ends on leaving: still up until then)
+      // in order: just finished; then what something was done for in the last 2 minutes (latest first: a ghast just
+      // killed puts Uneasy Alliance first); then Nether Misc, and the rest in the checklist's order
+      const rank = x => justDone(x) ? 0 : recent(x) ? 1 : x.key === "nethermisc" ? 2 : 3;
+      shown.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
+      // (the one it's on: the first not finished, counting time now or in the area they're in)
       const running = x => x.split && x.end == null && x.since != null;
-      // (or, with none counting time now, the first not finished in the area they're in: a misc split between things done)
-      const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running)
-        || shown.find(x => x.split && x.end == null && x.area.includes(midgame.area)) || null;
+      const focus = shown.find(x => x.split && x.end == null && (recent(x) || running(x) || x.area.includes(midgame.area))) || shown.find(running) || null;
       for (const x of shown) {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
@@ -240,10 +244,7 @@ function render() {
         else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
         const on = x === focus;
         if (on && !onSub) onSub = {mid: x.key, cur};
-        // (a misc split not finished: its icon goes through what's still needed for it, a few seconds each)
-        const need = x.time === "active" && x.end == null ? (x.parts || []).flatMap(p => p[3] || []) : [];
-        const icon = need.length ? cycle(x.key, need) : iconOf(x.item);
-        out.push({cls: "sub" + (on ? " on" : ""), icon, name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        out.push({cls: "sub" + (on ? " on" : ""), icon: iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
         info();
@@ -254,6 +255,11 @@ function render() {
         }
       }
     }
+    else if (i === 4) {
+      // Debris: the netherite there is, out of what's needed, and the TNT per debris
+      const x = midgame.sections.find(y => y.key === "debris");
+      if (x) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`}); for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); }
+    }
     else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
     return out;
   };
@@ -262,7 +268,7 @@ function render() {
     if (r.i === rows.length - 1 && !r.has && !r.on) continue;
     let d = "", dc = "";
     if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
-    const more = r.on && !(r.subs && r.subs.length) && (r.i === 3 || r.i === rows.length - 1) ? checklist(r.i) : [];
+    const more = r.on && !(r.subs && r.subs.length) && (r.i === 3 || r.i === 4 || r.i === rows.length - 1) ? checklist(r.i) : [];
     const open = r.on && (r.subs && r.subs.length || more.length);
     // the split it's on: shown once it's behind (unless its sub-splits are showing that)
     if (r.d == null && r.on && !open && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
