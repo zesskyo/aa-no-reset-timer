@@ -201,13 +201,16 @@ function render() {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
     if (i === 3) {
+      // (splits timed by the time spent in their area first: in the Nether, Skulls and Uneasy Alliance)
       const shown = midgame.sections.filter(x => x.area.some(a => near.includes(a))
-        && (x.split ? (x.end == null && x.done == null) || (x.complete && S.igt - x.end < 60000) : x.have > 0));
+        && (x.split ? (x.end == null && x.done == null) || (x.complete && S.igt - x.end < 60000) : x.need == null ? x.have > 0 : x.done == null))
+        .sort((a, b) => (b.time === "area") - (a.time === "area"));
       // (the one it's on: a split counting time now, its area's first)
       const running = x => x.split && x.end == null && x.since != null;
       const focus = shown.find(x => running(x) && x.area.includes(midgame.area)) || shown.find(running) || null;
       for (const x of shown) {
-        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: String(x.have)}); continue; }
+        // (not timed: what's left of it)
+        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: x.need == null ? String(x.have) : `${x.have}/${x.need}`}); continue; }
         const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
