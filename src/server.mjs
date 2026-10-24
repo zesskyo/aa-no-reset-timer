@@ -2,9 +2,9 @@
  * AA Live — a live splitter for AA No Reset (1.16.1) runs, read from Hermes.
  *
  * Finds the Minecraft instance Hermes is running in, follows the world's live play log as it's written, works out the
- * splits the same way the stats site does (the site's own code is inside this file), and compares them with the runs
- * on the stats site. The splits are shown on a page served here: open it in a browser, or add it to OBS as a
- * browser source.
+ * splits the same way the stats site does (the site's own code is inside this file), and compares them with earlier
+ * runs: those of a stats site (an aa-stats site, if one's set), and those finished with AA Live (kept in its folder).
+ * The splits are shown on a page served here: open it in a browser, or add it to OBS as a browser source.
  *
  * The page can also be opened on a phone on the same Wi-Fi (the links are printed when it starts).
  *
@@ -25,13 +25,12 @@ import { rotate } from "./rotator.mjs";
 const SITE_CODE = /*SITE_CODE*/"";
 const PAGE = /*PAGE*/"";
 const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' and the Midgame checklist's icons (see build.mjs)
-const VERSION = "0.1";
+const BASE_ICONS = /*BASE_ICONS*/{};   // the splits' own icons, for when there's no stats site to take them from
+const VERSION = "1.0";
 
 // ---------- Settings ----------
 const args = process.argv.slice(2);
 const opt = name => { const i = args.indexOf("--" + name); return i >= 0 ? args[i + 1] : undefined; };
-const DEFAULT_SITE = "https://zesskyo.github.io/aa-stats-no-reset-zesskyo-log/";
-const SITE = opt("site") || DEFAULT_SITE;
 const PORT = Number(opt("port") || 7476);
 // ---------- On a phone on the same Wi-Fi ----------
 // The page is served to the whole network (unless --local-only), at this computer's addresses there: Wi-Fi's first
@@ -73,18 +72,36 @@ const home = os.homedir();
 const HERMES_GLOBAL = process.platform === "darwin" ? path.join(home, "Library", "Application Support", "MCSRHermes")
   : process.platform === "win32" ? path.join(process.env.LOCALAPPDATA || process.env.APPDATA || home, "MCSRHermes")
   : process.env.XDG_RUNTIME_DIR ? path.join(process.env.XDG_RUNTIME_DIR, "MCSRHermes") : path.join(home, ".local", "share", "MCSRHermes");
-// this program's own folder: the last stats site download (for when there's no internet) and the last world
-const OWN = process.platform === "darwin" ? path.join(home, "Library", "Application Support", "AA Live") : path.join(home, ".aa-live");
-fs.mkdirSync(OWN, {recursive: true});
+// this program's own folder: its settings, the runs finished with it (runs/), and the last stats site download (for
+// when there's no internet)
+const OWN = process.platform === "darwin" ? path.join(home, "Library", "Application Support", "AA Live")
+  : process.platform === "win32" ? path.join(process.env.APPDATA || home, "AA Live") : path.join(home, ".aa-live");
+fs.mkdirSync(path.join(OWN, "runs"), {recursive: true});
 const ownFile = f => path.join(OWN, f);
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return null; } };
+// the settings, changed on the page (or --site): the stats site to compare with, if any
+const settings = readJson(ownFile("settings.json")) || {};
+let SITE = opt("site") ?? settings.site ?? "";
 const log = (...m) => console.log(new Date().toLocaleTimeString(), ...m);
 
 // ---------- The stats site's code and runs ----------
 let site = null;   // {api, comps, icons, title, runs, fetchedAt}
+let siteData = {runs: []}, siteAt = null;   // (the last stats site download, to add new runs of our own to)
+// The runs finished with AA Live (runs/ in its folder), and those of the stats site (if there's one); a run on both
+// counts once. Ours are numbered after the site's.
+function localRuns(siteRuns) {
+  const has = new Set(siteRuns.map(r => r.start + "|" + r.player));
+  let num = Math.max(0, ...siteRuns.map(r => (r.meta && r.meta.num) || 0));
+  const out = [];
+  for (const f of fs.readdirSync(path.join(OWN, "runs")).filter(f => f.endsWith(".json"))) { const r = readJson(path.join(OWN, "runs", f)); if (r && r.events && !has.has(r.start + "|" + r.player)) out.push(r); }
+  return out.sort((a, b) => a.start - b.start).map(r => ({...r, meta: {...(r.meta || {}), num: ++num, local: true}}));
+}
 function loadSite(data, fetchedAt) {
+  siteData = data; siteAt = fetchedAt;
+  const siteRuns = data.runs || [], mine = localRuns(siteRuns);
+  data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...(data.icons || {})}};
   const document = {getElementById: () => ({textContent: JSON.stringify(data)})};
-  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T};")(document);
+  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
   const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1;
   const durs = r => api.derive(r).splits.map((s, i) => s.dur ?? (i === POST ? 0 : null));   // (most runs have no Post-endgame)
   const all = valid.map(durs);
@@ -140,11 +157,12 @@ function loadSite(data, fetchedAt) {
   Object.assign(icons, ITEM_ICONS);
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
-  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt};
-  log(`Stats site: ${valid.length} runs` + (pb ? `, PB ${fmt(pb.finalIgt)}` : "") + (wr ? `, WR ${fmt(wr.finalIgt)}` : ""));
+  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt, url: SITE};
+  log(`Runs to compare with: ${valid.length}` + (mine.length ? ` (${mine.length} finished with AA Live)` : "") + (pb ? `, PB ${fmt(pb.finalIgt)}` : "") + (wr ? `, WR ${fmt(wr.finalIgt)}` : ""));
 }
 
 async function fetchSite() {
+  if (!SITE) { loadSite({runs: []}, null); update(); return; }   // (no stats site: just the runs finished with AA Live)
   try {
     let html;
     if (/^https?:\/\//i.test(SITE)) {
@@ -312,14 +330,26 @@ let state = null;
 function update() {
   if (!site) return;
   state = compute();
+  // a run just finished (not one being played back): kept in runs/, to compare the next ones with (and again if its
+  // time changes: thunder coming after a Thunderless finish)
+  if (finished) {
+    const key = site.api.runKey(finished), f = path.join(OWN, "runs", key + ".json");
+    if (savedRuns.get(key) !== finished.finalIgt && (readJson(f) || {}).finalIgt !== finished.finalIgt) {
+      try { fs.writeFileSync(f, JSON.stringify(site.api.encodeRun(finished))); log(`Run finished (${fmt(finished.finalIgt)}): saved, to compare the next ones with`); savedRuns.set(key, finished.finalIgt); loadSite(siteData, siteAt); state = compute(); }
+      catch (e) { log("Couldn't save the finished run: " + e.message); }
+    } else savedRuns.set(key, finished.finalIgt);
+  }
   const msg = "data: " + JSON.stringify(state) + "\n\n";
   for (const c of clients) c.write(msg);
 }
 
+let finished = null;   // the run being followed, once it's finished
+const savedRuns = new Map();   // (run key → its time when saved)
 function compute() {
+  finished = null;
   const {api} = site, n = api.SPLITS.length;
   const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
-    rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+    rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -330,6 +360,7 @@ function compute() {
   // inventory (Thunderless: waiting for thunder is then optional; if it still comes, the timer carries on)
   // (the stats site's own rule: a run that counts as Thunderful or Thunderless there)
   const done0 = api.derive(run).category !== "Invalid";
+  if (done0 && !replay) finished = run;
   const now = anchor ? Math.max(anchor.igt, run.finalIgt) : run.finalIgt;
   if (!done0) {
     // Still going: the run so far, as if it ended now (and as if back in the Overworld now, so a split that ends on
@@ -375,6 +406,21 @@ const server = http.createServer((req, res) => {
     const q = url.searchParams, num = k => q.has(k) && Number.isFinite(+q.get(k)) ? +q.get(k) : null;
     setReplay({t: num("t"), playing: q.has("play") ? q.get("play") === "1" : null, speed: num("speed")});
     res.writeHead(204); res.end();
+  } else if (url.pathname === "/settings" && req.method === "POST") {
+    // the settings form on the page (on this computer only)
+    if (!["127.0.0.1", "::1", ""].includes(from)) { res.writeHead(403); return res.end(); }
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 10000) req.destroy(); });
+    req.on("end", () => {
+      const j = (() => { try { return JSON.parse(body); } catch { return null; } })();
+      const s = j && typeof j.site === "string" ? j.site.trim() : null;
+      if (s == null || (s && !/^https?:\/\/\S+$/i.test(s))) { res.writeHead(400); return res.end("The stats site has to be a link (https://…), or empty"); }
+      settings.site = s; SITE = s;
+      try { fs.writeFileSync(ownFile("settings.json"), JSON.stringify(settings, null, 2)); } catch {}
+      log(s ? "Stats site set to " + s : "No stats site: comparing with the runs finished with AA Live");
+      site = null; fetchSite();
+      res.writeHead(204); res.end();
+    });
   } else if (url.pathname === "/state.json") {
     res.writeHead(200, {"content-type": "application/json"}); res.end(JSON.stringify(state));
   } else if (url.pathname === "/") {
@@ -386,9 +432,14 @@ server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
   const link = `http://localhost:${PORT}/`, lan = lanLinks();
   console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}`
     + (LAN ? lan.length ? `\n  On your phone (same Wi-Fi):          ` + lan.map(l => l.url + (lan.length > 1 ? ` (${l.name}${l.wifi ? ", Wi-Fi" : ""})` : "")).join("\n                                       ") : "\n  (No Wi-Fi address found: is this computer on a network?)" : "")
-    + `\n  Stats site:    ${SITE}\n`);
+    + `\n  Stats site:    ${SITE || "(none: set one on the page, or it compares with the runs you finish with AA Live)"}\n  Its folder:    ${OWN}\n`);
   checkFirewall();
-  if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
+  // (the splits, opened in the browser)
+  if (!args.includes("--no-open")) {
+    if (process.platform === "darwin") execFile("open", [link], () => {});
+    else if (process.platform === "win32") execFile("cmd", ["/c", "start", "", link], () => {});
+    else execFile("xdg-open", [link], () => {});
+  }
 });
 
 // ---------- Running ----------

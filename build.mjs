@@ -26,6 +26,15 @@ for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunt
   for (const f of fs.readdirSync(path.join(A, "icons", dir))) if (f.endsWith(".png")) ITEM_ICONS[prefix + f.slice(0, -4)] = png(path.join(A, "icons", dir, f));
 // (the icon files named after a biome's newer name: the game's 1.16 one is used in the checklist)
 ITEM_ICONS["at:snowy_tundra"] = ITEM_ICONS["at:snowy_plains"];
+// the splits' own icons (and every possible Post-endgame one), for when there's no stats site to take them from: the
+// stats site's icons folder, or an item ("star": a nether star)
+const { SPLITS, LAST_ICON, FALLBACK_LAST_ICON } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SPLITS, LAST_ICON, FALLBACK_LAST_ICON };")();
+const BASE_ICONS = {}, ITEM_FOR = {star: "nether_star"};
+for (const k of new Set([...SPLITS.map(s => s.icon), ...Object.values(LAST_ICON), FALLBACK_LAST_ICON].filter(Boolean))) {
+  const f = path.join(A, "icons", k + ".png"), id = ITEM_FOR[k] || k;
+  if (fs.existsSync(f)) BASE_ICONS[k] = png(f);
+  else if (items.index[id] != null) BASE_ICONS[k] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
+}
 let page = rd(path.join(here, "src/page.html"));
 for (const [k, f] of [["/*FONT_R*/", "MinecraftRegular.otf"], ["/*FONT_B*/", "MinecraftBold.otf"]]) page = page.replace(k, () => fs.readFileSync(path.join(A, "fonts", f)).toString("base64"));
 let s = rd(path.join(here, "src/server.mjs"));
@@ -35,6 +44,7 @@ put('import { rotate } from "./rotator.mjs";', "\n" + rot);
 put('/*SITE_CODE*/""', JSON.stringify(SITE));
 put('/*PAGE*/""', JSON.stringify(page));
 put('/*ITEM_ICONS*/{}', JSON.stringify(ITEM_ICONS));
+put('/*BASE_ICONS*/{}', JSON.stringify(BASE_ICONS));
 fs.mkdirSync(path.join(here, "app"), {recursive: true});
 fs.writeFileSync(path.join(here, "app/aa-live.mjs"), s);
 console.log("wrote app/aa-live.mjs", (s.length / 1024).toFixed(0) + " KB");

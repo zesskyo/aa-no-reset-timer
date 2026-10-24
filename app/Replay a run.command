@@ -7,7 +7,7 @@ if ! command -v node >/dev/null 2>&1; then
   read -n 1 -s -r -p "Press any key to close."
   exit 1
 fi
-echo "Which run? Type its number on the stats site (like 27), or drag a play.log onto this window, then press Return:"
+echo "Which run? Type its number on your stats site (like 27), or drag a play.log onto this window, then press Return:"
 read -r RUN
 RUN="${RUN%" "}"; RUN="${RUN//\\ / }"; RUN="${RUN#\"}"; RUN="${RUN%\"}"; RUN="${RUN#\'}"; RUN="${RUN%\'}"
 node aa-live.mjs --replay "$RUN" "$@"

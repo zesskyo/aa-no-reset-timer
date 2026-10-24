@@ -55,6 +55,10 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .info{margin-top:6px;padding:4px 12px 8px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-size:20px}
 .note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
+.setrow{display:flex;gap:6px;margin-top:8px}
+.setrow input{flex:1;min-width:0;background:var(--row);border:0;color:var(--text);font:inherit;font-size:18px;padding:4px 8px}
+.setrow button{border:0;background:var(--row);color:var(--text);font:inherit;font-size:20px;padding:4px 10px;cursor:pointer}
+.setrow button:hover{background:var(--on)}
 .hide{display:none!important}
 /* playing back a run (--replay): the slider and buttons */
 .replay{border-top:2px solid var(--line);padding:10px 12px;display:grid;gap:8px;font-size:20px}
@@ -85,6 +89,11 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
     </div>
     <div class="note hide" id="note"></div>
     <div class="note hide" id="phone"></div>
+    <form class="note hide" id="settings">
+      <label for="siteIn">Stats site (optional): your <a href="https://github.com/zesskyo/aa-stats" target="_blank" rel="noopener" style="color:inherit">aa-stats</a> site's link, to compare with its runs. Without one, it compares with the runs you finish with AA Live.</label>
+      <div class="setrow"><input id="siteIn" type="url" placeholder="https://you.github.io/your-site/" autocomplete="off" spellcheck="false"><button type="submit">Save</button></div>
+      <div id="setMsg"></div>
+    </form>
   </div>
 </div>
 <script>
@@ -342,7 +351,11 @@ function render() {
   put($("info"), info);
 
   // (on this computer's browser: the link for a phone on the same Wi-Fi)
-  const ph = $("phone"), showPhone = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && S.phone;
+  const here = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  // (the settings: in this computer's browser only, not in OBS or on a phone)
+  $("settings").classList.toggle("hide", !here);
+  if (here && document.activeElement !== $("siteIn") && $("siteIn").dataset.was !== (S.siteUrl || "")) { $("siteIn").value = $("siteIn").dataset.was = S.siteUrl || ""; }
+  const ph = $("phone"), showPhone = here && S.phone;
   ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, `On your phone (same Wi-Fi): <a href="${esc(S.phone)}" style="color:inherit">${esc(S.phone)}</a>`);
   // (playing back a run)
   const rp = S.replay, rpOn = !!rp && !window.obsstudio;
@@ -353,10 +366,15 @@ function render() {
     $("rpPlay").textContent = rp.playing ? "Pause" : "Play";
     for (const b of $("rpSpeeds").children) b.classList.toggle("sel", +b.dataset.speed === rp.speed);
   }
-  const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
+  const note = !S.siteRuns ? "No finished runs to compare with yet: finish one with AA Live running, or add your stats site below." : "";
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
 }
 // every frame (for the milliseconds)
+$("settings").addEventListener("submit", async e => {
+  e.preventDefault();
+  const r = await fetch("/settings", {method: "POST", body: JSON.stringify({site: $("siteIn").value})}).catch(() => null);
+  $("setMsg").textContent = !r ? "Couldn't reach AA Live" : r.ok ? "Saved" : await r.text();
+});
 const frame = () => { render(); requestAnimationFrame(frame); };
 requestAnimationFrame(frame);
 </script>
