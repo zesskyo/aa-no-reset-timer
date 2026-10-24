@@ -45,6 +45,7 @@ put('/*SITE_CODE*/""', JSON.stringify(SITE));
 put('/*PAGE*/""', JSON.stringify(page));
 put('/*ITEM_ICONS*/{}', JSON.stringify(ITEM_ICONS));
 put('/*BASE_ICONS*/{}', JSON.stringify(BASE_ICONS));
+put('/*BUILD*/0', String(Date.now()));   // (for updating: see "Updating itself" in server.mjs)
 fs.mkdirSync(path.join(here, "app"), {recursive: true});
 fs.writeFileSync(path.join(here, "app/aa-live.mjs"), s);
 console.log("wrote app/aa-live.mjs", (s.length / 1024).toFixed(0) + " KB");

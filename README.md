@@ -62,7 +62,9 @@ Double-click **app\Replay a run.bat** (Windows) or **app/Replay a run.command** 
 
 ## Updating
 
-Download the ZIP again and replace your folder with it (your runs and settings are kept elsewhere), then close AA Live's window and start it again.
+It updates itself: each time it starts, AA Live looks for a newer version here on GitHub, and if there is one, puts it in place and starts the new one (a few seconds; with no internet it just starts). It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits, and updates the next time you start it. After an update, refresh the OBS source (right-click it › Refresh).
+
+To update by hand instead, download the ZIP again and replace your folder with it (your runs and settings are kept elsewhere). To stop it updating, add `--no-update` at the end of the line in the start file.
 
 ## Where it keeps things
 
@@ -79,6 +81,7 @@ After `node app/aa-live.mjs` (or add them to the end of the line in the start fi
 | `--world <folder>` | a world folder to follow, instead of finding it through Hermes |
 | `--no-open` | don't open the browser |
 | `--local-only` | only this computer can open the page (not a phone) |
+| `--no-update` | don't look for a newer version when it starts |
 | `--replay <run>` | play back a run: a play.log, or its number on the stats site |
 
 ## How it works

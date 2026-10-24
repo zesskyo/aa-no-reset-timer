@@ -18,7 +18,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { rotate } from "./rotator.mjs";
 
 // (gen.mjs puts these in)
@@ -27,9 +28,40 @@ const PAGE = /*PAGE*/"";
 const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' and the Midgame checklist's icons (see build.mjs)
 const BASE_ICONS = /*BASE_ICONS*/{};   // the splits' own icons, for when there's no stats site to take them from
 const VERSION = "1.0";
+const BUILD = /*BUILD*/0;   // when this file was built (build.mjs): a newer one has a bigger number
 
 // ---------- Settings ----------
 const args = process.argv.slice(2);
+
+// ---------- Updating itself ----------
+// All of AA Live is this one file: when it starts, it looks for a newer one on GitHub, and if there is one, puts it in
+// place of itself and starts again (--no-update: not). While it runs, it only looks (every 6 hours) and says so on the
+// page: it never changes in the middle of a run.
+const UPDATE_URL = process.env.AA_LIVE_UPDATE_URL || "https://raw.githubusercontent.com/zesskyo/aa-no-reset-timer/main/app/aa-live.mjs";   // (the variable: for testing)
+const SELF = fileURLToPath(import.meta.url);
+let updateReady = false;
+async function newerBuild() {
+  if (!BUILD || args.includes("--no-update")) return null;   // (BUILD 0: not a built file, src/server.mjs itself)
+  try {
+    const res = await fetch(UPDATE_URL, {signal: AbortSignal.timeout(8000), headers: {"cache-control": "no-cache"}});
+    if (!res.ok) return null;
+    const text = await res.text(), m = /\nconst BUILD = (\d+);/.exec(text);
+    return m && +m[1] > BUILD && text.includes("// ---------- Updating itself ----------") ? text : null;
+  } catch { return null; }
+}
+if (process.env.AA_LIVE_UPDATED !== "1") {
+  const text = await newerBuild();
+  if (text) {
+    try {
+      fs.writeFileSync(SELF + ".new", text); fs.renameSync(SELF + ".new", SELF);
+      console.log("AA Live was updated: starting the new version…");
+      const child = spawn(process.execPath, [SELF, ...args], {stdio: "inherit", env: {...process.env, AA_LIVE_UPDATED: "1"}});
+      child.on("exit", code => process.exit(code ?? 0));
+      await new Promise(() => {});   // (this one waits for the new one)
+    } catch (e) { console.log("Couldn't update AA Live (" + e.message + "): carrying on with this version"); }
+  }
+}
+setInterval(async () => { if (!updateReady && await newerBuild()) { updateReady = true; console.log("A new version of AA Live is out: it updates the next time you start it."); } }, 6 * 3600000);
 const opt = name => { const i = args.indexOf("--" + name); return i >= 0 ? args[i + 1] : undefined; };
 const PORT = Number(opt("port") || 7476);
 // ---------- On a phone on the same Wi-Fi ----------
@@ -349,7 +381,7 @@ function compute() {
   finished = null;
   const {api} = site, n = api.SPLITS.length;
   const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
-    rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+    rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, updateReady, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
