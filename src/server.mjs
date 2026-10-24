@@ -79,8 +79,15 @@ function loadSite(data, fetchedAt) {
     if (!counts) return null;
     return [...Array(counts)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? (i ? comps[k].ends[i - 1] : 0) + pick[k](xs) : null; });
   });
-  // the fastest each step has been reached into its split (for gold)
-  if (comps.best) comps.best.subInto = api.SPLITS.map((_, i) => { const n = Math.max(0, ...into.map(x => x[i] ? x[i].length : 0)); return n ? [...Array(n)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? Math.min(...xs) : null; }) : null; });
+  // how long each step took: a real run's own; the average, fastest (gold) and slowest of all the runs
+  const durOf = r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.dur) : null);
+  if (comps.pb) comps.pb.subDurs = durOf(pb);
+  if (comps.wr) comps.wr.subDurs = durOf(wr);
+  const allDurs = valid.map(durOf);
+  for (const k of ["avg", "best", "worst"]) if (comps[k]) comps[k].subDurs = api.SPLITS.map((_, i) => {
+    const n = Math.max(0, ...allDurs.map(x => x[i] ? x[i].length : 0));
+    return n ? [...Array(n)].map((_, j) => { const xs = allDurs.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? pick[k](xs) : null; }) : null;
+  });
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];

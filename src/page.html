@@ -151,7 +151,10 @@ function render() {
   // What's listed: each split; under the one it's on, its sub-splits (done whenever their step happens, in any order).
   // Post-endgame only when the run has one.
   const cs = (i, j) => C && C.subs && C.subs[i] && C.subs[i][j] != null ? C.subs[i][j] : null;
-  const bInto = (i, j) => best && best.subInto && best.subInto[i] && best.subInto[i][j] != null ? best.subInto[i][j] : null;
+  // how long a step took: the comparison's, and the fastest ever (gold)
+  const cd = (i, j) => C && C.subDurs && C.subDurs[i] && C.subDurs[i][j] != null ? C.subDurs[i][j] : null;
+  const bd = (i, j) => best && best.subDurs && best.subDurs[i] && best.subDurs[i][j] != null ? best.subDurs[i][j] : null;
+  let onSub = null;   // the step it's on: {name, cur, i, j}
   const list = [];
   for (const r of rows) {
     if (r.i === rows.length - 1 && !r.has && !r.on) continue;
@@ -166,10 +169,12 @@ function render() {
     // its sub-splits: the next one not done yet is the one it's on
     let pd = prevD;
     const next = r.subs.findIndex(x => x.t == null);
+    // (the step it's on started when the last step before it was done, or with the split)
+    if (next >= 0) onSub = {i: r.i, j: next, cur: now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
     r.subs.forEach((x, j) => {
       const cmp = cs(r.i, j);
       let sd = "", sc = "";
-      if (x.t != null && cmp != null) { const v = x.t - cmp, into = x.t - r.start; sd = delta(v); sc = colour(v, v <= pd, bInto(r.i, j) != null && into < bInto(r.i, j)); pd = v; }
+      if (x.t != null && cmp != null) { const v = x.t - cmp; sd = delta(v); sc = colour(v, v <= pd, x.dur != null && bd(r.i, j) != null && x.dur < bd(r.i, j)); pd = v; }
       else if (j === next && cmp != null && now > cmp) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
       list.push({cls: "sub" + (j === next ? " on" : ""), icon: x.item ? "item:" + x.item : null, name: x.name, d: sd, dc: sc, tm: fmt(x.t != null ? x.t : cmp)});
     });
@@ -202,10 +207,12 @@ function render() {
   put(t, fmtMs(now, true));
   const liveD = on && ce(on.i) != null && now > ce(on.i) ? now - ce(on.i) : prevD;
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
-  // the split it's on: its time so far, and the comparison's for it
-  put($("segTimer"), on ? fmtMs(on.cur) : "");
-  put($("segComp"), C && on && comp !== "best" ? `${esc(C.short)}: ${c(on.i) != null ? fmt(c(on.i)) : "—"}` : "");
-  put($("segBest"), on && best ? `Best: ${b(on.i) != null ? fmt(b(on.i)) : "—"}` : "");
+  // the split it's on (or the step of it, when it has sub-splits): its time so far, and the comparison's and the best
+  const segCur = onSub ? onSub.cur : on ? on.cur : null;
+  const segC = onSub ? cd(onSub.i, onSub.j) : on ? c(on.i) : null, segB = onSub ? bd(onSub.i, onSub.j) : on ? b(on.i) : null;
+  put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
+  put($("segComp"), C && on && comp !== "best" ? `${esc(C.short)}: ${segC != null ? fmt(segC) : "—"}` : "");
+  put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
