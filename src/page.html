@@ -15,14 +15,14 @@
 *{box-sizing:border-box;border-radius:0}
 button{-webkit-appearance:none;appearance:none}
 html,body{margin:0}
-html,body{background:transparent}
-html.browser{background:#000}
+html{background:rgba(0,0,0,var(--bg-alpha))}
+body{background:transparent}
 body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:16px;line-height:1.25;-webkit-font-smoothing:none}
 .split{margin:0}
-.box{background:rgba(0,0,0,var(--bg-alpha));overflow:hidden}
+.box{overflow:hidden}
 .head{padding:8px 12px 6px;border-bottom:2px solid var(--line);text-align:center}
-.t1{font-weight:700;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:15px}
+.t1{font-weight:700;font-size:18px;white-space:nowrap}
+.t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:14px}
 .t2 .num{text-align:right;white-space:nowrap}
 .t3{display:flex;justify-content:center;gap:28px;margin-top:4px;font-size:15px;white-space:nowrap}
 .rows{padding:2px 0}
@@ -34,14 +34,14 @@ body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-mon
 .r .tm{text-align:right}
 .ahead{color:#2ee86a} .ahead-lose{color:#8fe3a9} .behind-gain{color:#f08a80} .behind{color:#ff3b30} .gold{color:var(--gold)}
 .detail{display:flex;align-items:flex-end;gap:10px;padding:6px 12px 2px}
-.dl{flex:1;min-width:0;display:grid;gap:3px;padding-bottom:4px}
-.dc{font-size:13px;white-space:nowrap;cursor:pointer}
+.dl{flex:1;min-width:0;display:grid;gap:2px;padding-bottom:2px}
+.dc{font-size:14px;white-space:nowrap;cursor:pointer}
 .t2 .st{text-align:left;color:var(--dim);font-size:12px;white-space:nowrap}
 .dr{text-align:right;white-space:nowrap}
-.big{font-size:48px;font-weight:700;line-height:1;letter-spacing:1px;text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums}
+.big{font-size:48px;font-weight:700;line-height:.86;letter-spacing:1px;text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums}
 .big .ms{font-size:28px}
 .big.paused{color:var(--dim)}
-.seg{color:var(--dim);font-size:22px;margin-top:2px;text-shadow:2px 2px 0 #000}
+.seg{color:var(--dim);font-size:22px;line-height:1;margin-top:-1px;text-shadow:2px 2px 0 #000}
 .seg .ms{font-size:15px}
 .info{margin-top:6px;padding:4px 12px 8px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:15px}
@@ -53,13 +53,12 @@ body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-mon
 <div class="split">
   <div class="box">
     <div class="head">
-      <div class="t1" id="title">AA Live</div>
-      <div class="t2"><span class="st" id="status"></span><span id="sub"></span><span class="num" id="num"></span></div>
+      <div class="t2"><span class="st" id="status"></span><span class="t1" id="title">AA Live</span><span class="num" id="num"></span></div>
       <div class="t3"><span id="pbT"></span><span id="wrT"></span></div>
     </div>
     <div class="rows" id="rows"></div>
     <div class="detail">
-      <div class="dl"><div class="dc" id="segComp" title="Change what you're compared with"></div></div>
+      <div class="dl"><div class="dc" id="segComp" title="Change what you're compared with"></div><div class="dc" id="segBest"></div></div>
       <div class="dr"><div class="big" id="timer">0:00:00<span class="ms">.000</span></div><div class="seg" id="segTimer"></div></div>
     </div>
     <div class="info" id="info"></div>
@@ -70,11 +69,11 @@ body{text-shadow:2px 2px 0 #000;color:var(--text);font-family:"Minecraft",ui-mon
 "use strict";
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
-// the background: see-through by default (for OBS); ?bg=0 to 100 makes it that much black
-const bg = Math.min(100, Math.max(0, Number(P.get("bg")) || 0));
+// the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
+// browser tab (where there's nothing behind the page)
+const bgParam = parseFloat(P.get("bg"));
+const bg = Number.isFinite(bgParam) ? Math.min(100, Math.max(0, bgParam)) : window.obsstudio ? 0 : 100;
 document.documentElement.style.setProperty("--bg-alpha", bg / 100);
-// (in a normal browser tab there's nothing behind the page, so it's black there)
-if (!window.obsstudio) document.documentElement.classList.add("browser");
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
 let comp = P.get("comp") || store.get("aa-live-comp") || "pb";
@@ -89,8 +88,6 @@ const showMs = P.get("ms") !== "0";
 const fmtMs = (ms, long) => fmt(ms, long) + (showMs ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0")}</span>` : "");
 // a difference: −9.4 under a minute, otherwise −1:23 (or +1:02:03)
 const delta = ms => (ms < 0 ? "−" : "+") + (Math.abs(ms) < 60000 ? (Math.floor(Math.abs(ms) / 100) / 10).toFixed(1) : fmt(Math.abs(ms)));
-// with the milliseconds as plain text (for the header)
-const fmtFull = ms => ms == null ? "—" : fmt(ms, true) + (showMs ? "." + String(Math.floor(ms) % 1000).padStart(3, "0") : "");
 // LiveSplit's colours: ahead or behind, and gaining or losing time in that split (gold: the best that split has been)
 const colour = (d, gain, gold) => gold ? "gold" : d <= 0 ? (gain ? "ahead" : "ahead-lose") : (gain ? "behind-gain" : "behind");
 
@@ -124,11 +121,10 @@ function render() {
   const C = S.comps[comp] || S.comps[ORDER.find(k => S.comps[k])] || null, best = S.comps.best, pb = S.comps.pb, wr = S.comps.wr;
   const now = liveIgt(), running = S.open && !S.paused && !S.done;
   put($("title"), esc(S.title));
-  put($("sub"), esc(S.sub.replace(/^\((.*)\)$/, "$1")));
   put($("num"), S.num ? "Run " + S.num : "");
-  put($("pbT"), pb ? "PB: " + fmtFull(pb.final) : "");
-  put($("wrT"), wr ? "WR: " + fmtFull(wr.final) : "");
-  $("status").textContent = !connected ? "Not connected" : S.done ? (S.thunderless ? "Thunderless" : "Done") : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
+  put($("pbT"), pb ? "PB: " + fmt(pb.final, true) : "");
+  put($("wrT"), wr ? "WR: " + fmt(wr.final, true) : "");
+  $("status").textContent = !connected ? "Not connected" : S.done ? "Done" : !S.world ? "Waiting for Minecraft" : !S.file ? "No Hermes log" : !S.open ? "World closed" : S.paused ? "Paused" : "";
 
   const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
   const ri = rows.findIndex(r => r.from != null);
@@ -168,7 +164,8 @@ function render() {
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
   // the split it's on: its time so far, and the comparison's for it
   put($("segTimer"), on ? fmtMs(on.cur) : "");
-  put($("segComp"), C && on ? `${esc(C.short)}: ${c(on.i) != null ? fmt(c(on.i)) : "—"}` : "");
+  put($("segComp"), C && on && comp !== "best" ? `${esc(C.short)}: ${c(on.i) != null ? fmt(c(on.i)) : "—"}` : "");
+  put($("segBest"), on && best ? `Best: ${b(on.i) != null ? fmt(b(on.i)) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
@@ -176,9 +173,9 @@ function render() {
   // the last split: against the comparison, and how much faster it's been done before (the time that could have been saved)
   if (prev && c(prev.i) != null) { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
     info += kv("Previous Segment", `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : "")); }
-  if (pace != null && !S.done) info += kv("Current Pace", fmtFull(pace));
-  if (possible != null && !S.done) info += kv("Best Possible Time", fmtFull(possible));
-  if (best) info += kv("Sum of Best Segments", fmtFull(best.final));
+  if (pace != null && !S.done) info += kv("Current Pace", fmt(pace, true));
+  if (possible != null && !S.done) info += kv("Best Possible Time", fmt(possible, true));
+  if (best) info += kv("Sum of Best Segments", fmt(best.final, true));
   put($("info"), info);
 
   const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";

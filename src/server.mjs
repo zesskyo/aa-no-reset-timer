@@ -70,7 +70,7 @@ function loadSite(data, fetchedAt) {
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
-  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", sub: (data.text && data.text.siteSubtitle) || "", runs: valid.length, fetchedAt};
+  site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt};
   log(`Stats site: ${valid.length} runs` + (pb ? `, PB ${fmt(pb.finalIgt)}` : "") + (wr ? `, WR ${fmt(wr.finalIgt)}` : ""));
 }
 
@@ -130,9 +130,10 @@ function findWorld() {
 let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", plain = false;
 let anchor = null;      // {igt, wall}: the IGT at the latest line, and when that was
 let paused = true, open = false, changed = false;
+let channeling = false;   // whether a channeling trident has been in the inventory (for a Thunderless finish)
 
 function reset(w) {
-  world = w; file = null; offset = 0; rest = Buffer.alloc(0); text = ""; anchor = null; paused = true; open = false; changed = true;
+  world = w; file = null; offset = 0; rest = Buffer.alloc(0); text = ""; anchor = null; paused = true; open = false; channeling = false; changed = true;
   log(w ? "World: " + w : "Waiting for Minecraft (Hermes)…");
 }
 
@@ -143,9 +144,9 @@ function readNew() {
   const enc = path.join(world, "hermes", "restricted", "play.log.enc"), dec = path.join(world, "hermes", "play.log");
   const f = fs.existsSync(enc) ? enc : fs.existsSync(dec) ? dec : null;
   if (!f) return;
-  if (f !== file) { file = f; plain = f === dec; offset = 0; rest = Buffer.alloc(0); text = ""; }
+  if (f !== file) { file = f; plain = f === dec; offset = 0; rest = Buffer.alloc(0); text = ""; channeling = false; }
   let size; try { size = fs.statSync(f).size; } catch { return; }
-  if (size < offset) { offset = 0; rest = Buffer.alloc(0); text = ""; }   // (started again)
+  if (size < offset) { offset = 0; rest = Buffer.alloc(0); text = ""; channeling = false; }   // (started again)
   if (size === offset) return;
   const fd = fs.openSync(f, "r"), chunk = Buffer.alloc(size - offset);
   try { fs.readSync(fd, chunk, 0, chunk.length, offset); } finally { fs.closeSync(fd); }
@@ -172,6 +173,9 @@ function watchLine(line) {
   if (type === "initialize") { open = true; paused = false; }
   else if (type === "close" || type === "server_shutdown") { open = false; paused = true; }
   else if (type === "screen") paused = line.includes('"is_pause":true');
+  else if (type === "inventory_slots" && !channeling && line.includes('"minecraft:channeling"')) {
+    try { channeling = Object.values(JSON.parse(line).data.slots || {}).some(v => v && v.id === "minecraft:trident" && ((v.tag && v.tag.Enchantments) || []).some(e => e.id === "minecraft:channeling")); } catch {}
+  }
 }
 
 // ---------- The splits ----------
@@ -185,15 +189,16 @@ function update() {
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, title: site.title, sub: site.sub, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
-  const empty = {...base, num: site.nextNum, done: false, thunderless: false, igt: anchor ? anchor.igt : 0,
+  const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
   if (!text) return empty;
   let run;
   try { run = api.parseLog(text, "play.log"); } catch { return empty; }
-  // finished: everything done, or everything but Very Very Frightening (Thunderless; if thunder still comes, it carries on)
-  const missing = api.derive(run).missing, done0 = !missing.length || (missing.length === 1 && missing[0] === api.VVF);
+  // finished: everything done, or everything but Very Very Frightening once a channeling trident has been in the
+  // inventory (Thunderless: waiting for thunder is then optional; if it still comes, the timer carries on)
+  const missing = api.derive(run).missing, done0 = !missing.length || (missing.length === 1 && missing[0] === api.VVF && channeling);
   const now = anchor ? Math.max(anchor.igt, run.finalIgt) : run.finalIgt;
   if (!done0) {
     // Still going: the run so far, as if it ended now (and as if back in the Overworld now, so a split that ends on
@@ -219,7 +224,7 @@ function compute() {
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
   const known = api.RUNS.find(r => r.start === run.start && r.player === run.player);
   const num = known ? api.runNum(known) : site.nextNum;
-  return {...base, num, done: done0, thunderless: done0 && missing.length === 1, igt: end, splits: rows};
+  return {...base, num, done: done0, igt: end, splits: rows};
 }
 
 // ---------- The page ----------

@@ -35,7 +35,7 @@ Options (after `node app/aa-live.mjs`):
 - **The live log:** while you play, Hermes writes the play log only ciphered, to `saves/<world>/hermes/restricted/play.log.enc`; the readable `play.log` is only made when you leave the world. Each line is ciphered on its own with a fixed character swap, which `src/rotator.mjs` undoes (a port of Hermes' `Rotator`).
 - **The splits:** the whole log is read again at most once a second, with the stats site's own `parse-log.js`, `splits.js` and `stats.js`, so the live splits match the site. While a run is going, it's treated as if it ended now. The site decides some splits from what happens afterwards (when Enchanting ends, early Endgame), so those can move while they settle.
 - **The timer:** SpeedRunIGT's retimed IGT (`retime`) from the latest line of the log, counted up in the page while the game isn't paused or closed.
-- **Finished:** 80/80, or 79/80 with only Very Very Frightening missing (Thunderless). If thunder still comes, it carries on.
+- **Finished:** 80/80, or 79/80 with only Very Very Frightening missing once a channeling trident has been in the inventory (Thunderless). If thunder still comes, it carries on.
 - **The comparisons:** the stats site's page has all its runs in it. They're downloaded when it starts and every 30 minutes, and the last download is kept for when there's no internet (in `~/Library/Application Support/AA Live/`).
 
 ## Changing it
