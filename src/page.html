@@ -71,7 +71,6 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
     </div>
     <div class="info" id="info"></div>
     <div class="note hide" id="note"></div>
-    <div class="note hide" id="phone"></div>
   </div>
 </div>
 <script>
@@ -265,9 +264,6 @@ function render() {
   if (best) info += kv("Sum of Best Segments", fmt(best.final, true));
   put($("info"), info);
 
-  // (on this computer's browser: the link for a phone)
-  const ph = $("phone"), showPhone = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && S.phone && S.phone.length;
-  ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, "On your phone (same Wi-Fi): " + S.phone.map(u => `<b>${esc(u)}</b>`).join(" or "));
   const note = !S.siteRuns ? "No runs from the stats site yet, so there's nothing to compare with." : "";
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
 }

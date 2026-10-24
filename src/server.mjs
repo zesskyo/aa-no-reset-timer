@@ -6,8 +6,7 @@
  * on the stats site. The splits are shown on a page served here: open it in a browser, or add it to OBS as a
  * browser source.
  *
- * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open] [--local-only]
- *   (the page can be opened from other devices on the same Wi-Fi, a phone say; --local-only: only on this computer)
+ * Usage: node aa-live.mjs [--site <stats site link>] [--port 7476] [--world <world folder>] [--no-open]
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -28,9 +27,6 @@ const opt = name => { const i = args.indexOf("--" + name); return i >= 0 ? args[
 const DEFAULT_SITE = "https://zesskyo.github.io/aa-stats-no-reset-zesskyo-log/";
 const SITE = opt("site") || DEFAULT_SITE;
 const PORT = Number(opt("port") || 7476);
-const LAN = !args.includes("--local-only");
-// the links to the page from other devices on the same network (this computer's addresses there)
-const phoneLinks = () => LAN ? Object.values(os.networkInterfaces()).flat().filter(a => a && a.family === "IPv4" && !a.internal).map(a => `http://${a.address}:${PORT}/`) : [];
 const WORLD = opt("world") ? path.resolve(opt("world")) : null;
 const home = os.homedir();
 // where Hermes keeps its list of running games (the same places as HermesCore.getGlobalPath)
@@ -219,7 +215,7 @@ function update() {
 
 function compute() {
   const {api} = site, n = api.SPLITS.length;
-  const base = {v: VERSION, phone: phoneLinks(), title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
+  const base = {v: VERSION, title: site.title, siteRuns: site.runs, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
@@ -276,9 +272,9 @@ const server = http.createServer((req, res) => {
   } else { res.writeHead(404); res.end(); }
 });
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
-server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
-  const link = `http://localhost:${PORT}/`, phone = phoneLinks();
-  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}` + (phone.length ? `\n  On your phone (same Wi-Fi):          ${phone.join("  or  ")}` : "") + `\n  Stats site:    ${SITE}\n`);
+server.listen(PORT, "127.0.0.1", () => {
+  const link = `http://localhost:${PORT}/`;
+  console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}\n  Stats site:    ${SITE}\n`);
   if (!args.includes("--no-open") && process.platform === "darwin") execFile("open", [link], () => {});
 });
 

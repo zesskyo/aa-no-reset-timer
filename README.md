@@ -13,8 +13,6 @@ The timer and splits are a web page served on your computer, so you can open it 
 3. Double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose Open, then Open again.
 4. The splits open in your browser at <http://localhost:7476/>. To stop it, close its Terminal window.
 
-**On your phone:** with your phone on the same Wi-Fi, open the link AA Live prints in its Terminal window ("On your phone"), something like `http://192.168.1.20:7476/`; it's also shown under the splits in your browser. The first time, macOS may ask whether node can accept incoming connections: allow it. To keep it to this computer only, start it with `--local-only`.
-
 **Updating:** download the repo again and replace your folder with it (or `git pull`, if you cloned it), then close AA Live's Terminal window and start it again. In OBS, right-click the browser source › Refresh (or press "Refresh cache of current page" in its properties); in a browser, reload the page.
 
 **OBS:** add a Browser source with the URL `http://localhost:7476/`, width 440 and height 460 (the splitter is 440 pixels wide and about 460 high; with `?scale=`, multiply both).
@@ -31,7 +29,6 @@ Options (after `node app/aa-live.mjs`):
 | `--port <n>` | the port for the page (default 7476) |
 | `--world <folder>` | a world folder to follow, instead of finding it through Hermes |
 | `--no-open` | don't open the browser |
-| `--local-only` | only this computer can open the page (not a phone on the same Wi-Fi) |
 
 ## How it works
 
