@@ -383,7 +383,8 @@ function render() {
     for (const b of $("rpSpeeds").children) b.classList.toggle("sel", +b.dataset.speed === rp.speed);
   }
   const note = [!S.siteRuns ? "No finished runs to compare with yet: finish one with AA Live running, or add your stats site below." : "",
-    S.updateReady && !window.obsstudio ? "A new version of AA Live is out: it updates the next time you start it." : ""].filter(Boolean).join(" ");
+    S.updateReady && !window.obsstudio ? "A new version of AA Live is out: it updates the next time you start it." : "",
+    S.oldHermes && !window.obsstudio ? `This world's Hermes (${S.oldHermes}) doesn't log biomes, so the biome splits can't be timed and the checklist can't tell where you are: update Hermes to 0.14 or newer.` : ""].filter(Boolean).join(" ");
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
 }
 // every frame (for the milliseconds)

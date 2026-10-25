@@ -419,7 +419,11 @@ function compute() {
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
   const known = api.RUNS.find(r => r.start === run.start && r.player === run.player);
   const num = known ? api.runNum(known) : site.nextNum;
-  return {...base, num, done: done0, igt: end, splits: rows};
+  // a Hermes that doesn't log biomes (before 0.14): the page says to update it (after a minute of the world, so it's
+  // not said before the first biome line comes)
+  const hv = /"hermes_version":"([^"]+)"/.exec(text);
+  const oldHermes = run.st.noBiomes && end > 60000 ? (hv ? hv[1].replace(/\+.*/, "") : "?") : null;
+  return {...base, num, done: done0, igt: end, splits: rows, oldHermes};
 }
 
 // ---------- The page ----------

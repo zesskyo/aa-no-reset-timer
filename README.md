@@ -14,7 +14,7 @@ A live splitter for **AA No Reset** runs of Minecraft 1.16.1: all advancements i
 
 ## What you need
 
-- Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/Hermes) mod, and SpeedRunIGT.
+- Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/Hermes) mod (**0.14 or newer**: older versions don't log the biome you're in, so the biome splits can't be timed and the Midgame checklist can't follow where you are), and SpeedRunIGT.
 - That's it: AA Live runs on [Node.js](https://nodejs.org), and if it isn't installed, AA Live downloads its own copy the first time it starts (about 30–45 MB, into its `app/node` folder, checked against nodejs.org's checksums; nothing is installed on the computer). If Node.js is installed, it uses that.
 - AA Live itself: **Code › Download ZIP** on this page, then unzip it somewhere.
 
