@@ -16,7 +16,7 @@ const ITEM_ICONS = {};
 const png = f => "data:image/png;base64," + fs.readFileSync(f).toString("base64");
 const ADV_ITEMS = new Function(rd(path.join(A, "src/splits.js")) + "\nreturn ADV_ITEMS;")();
 const itemIds = new Set([...Object.values(SUB_ITEMS), ...MIDGAME.map(m => m.item).filter(x => !x.includes(":")), ...Object.values(ADV_ITEMS), "book", "cod", "tnt",
-  ...MIDGAME.flatMap(m => (m.goals || []).filter(g => g[0] === "food").map(g => g[1][0]))]);
+  ...MIDGAME.flatMap(m => [...(m.goals || []), ...(m.extra ? m.extra.goals : [])]).filter(g => g[0] === "food").map(g => g[1][0])]);
 for (const id of itemIds) {
   if (id.startsWith("icon:")) { ITEM_ICONS["item:" + id] = png(path.join(A, "icons", id.slice(5) + ".png")); continue; }
   if (items.index[id] == null) throw new Error("items.json has no " + id);
