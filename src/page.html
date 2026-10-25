@@ -262,8 +262,8 @@ function render() {
       if (!focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
         // (not timed: what's left of it)
-        const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
-        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: x.need == null ? String(x.have) : `${x.have}/${x.need}`}); info(); continue; }
+        const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); };
+        if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: x.need == null ? String(x.have) : `${x.have}/${x.need}`, dc: "prog", tm: ""}); info(); continue; }
         const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
@@ -276,22 +276,22 @@ function render() {
         // (each with the icon of something missing in it, taking turns)
         info();
         // (more to do alongside it, not timed: Snowy's "While Curing", the icons of what's left taking turns)
-        if (on && x.extra && x.extra[1] < x.extra[2]) out.push({cls: "sub part", icon: x.extra[3].length ? cycle(x.key + "|extra", x.extra[3]) : null, name: x.extra[0], d: "", dc: "", tm: `${x.extra[1]}/${x.extra[2]}`});
+        if (on && x.extra && x.extra[1] < x.extra[2]) out.push({cls: "sub part", icon: x.extra[3].length ? cycle(x.key + "|extra", x.extra[3]) : null, name: x.extra[0], d: `${x.extra[1]}/${x.extra[2]}`, dc: "prog", tm: ""});
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
         // (but not one that just says the same as the split's own row: Cats 5/11 under Cats 5/11)
         const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
         if (on && x.parts && !same && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
           const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
-          out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
+          out.push({cls: "sub part", icon: ic, name: n, d: k > 1 ? `${h}/${k}` : "", dc: "prog", tm: ""});
         }
       }
     }
     else if (i === 4) {
       // Debris: the netherite there is, out of what's needed, and the TNT per debris
       const x = midgame.sections.find(y => y.key === "debris");
-      if (x) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`}); for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); }
+      if (x) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: `${x.have}/${x.need}`, dc: "prog", tm: ""}); for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); }
     }
-    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: "", dc: "", tm: `${x.have}/${x.need}`});
+    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: `${x.have}/${x.need}`, dc: "prog", tm: ""});
     return out;
   };
   const list = [];
