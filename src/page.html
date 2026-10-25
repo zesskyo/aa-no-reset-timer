@@ -236,7 +236,8 @@ function render() {
   const checklist = i => {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
-    if (i === 3) {
+    // (Midgame, and Post-endgame: Midgame's leftovers, done later, timed the same way)
+    if (i === 3 || i === S.splits.length - 1) {
       // (a split that's just finished shows for a minute, wherever they are, so its final time can be seen; Debris is
       // under the Debris split)
       const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
