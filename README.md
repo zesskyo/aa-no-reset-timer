@@ -62,9 +62,13 @@ Double-click **app\Replay a run.bat** (Windows) or **app/Replay a run.command** 
 
 ## Updating
 
-It updates itself: each time it starts, AA Live looks for a newer version here on GitHub, and if there is one, puts it in place and starts the new one (a few seconds; with no internet it just starts). It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits, and updates the next time you start it. After an update, refresh the OBS source (right-click it › Refresh).
+**To update, close AA Live's window and start it again** (double-click **Start AA Live.bat**, or **Start AA Live.command** on a Mac). Each time it starts, AA Live looks for a newer version here on GitHub, and if there is one, puts it in place and starts the new one: a few seconds (with no internet, it just starts). Then, in OBS, right-click the browser source › **Refresh**.
 
-To update by hand instead, download the ZIP again and replace your folder with it (your runs and settings are kept elsewhere). To stop it updating, add `--no-update` at the end of the line in the start file.
+It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits (in your browser), and updates the next time you start it.
+
+> **Downloaded AA Live before it updated itself (before version 1.0)?** Update by hand once: close AA Live's window, download the ZIP again (**Code › Download ZIP**), unzip it and replace your old folder with it. Your settings and finished runs are kept elsewhere (see below), so nothing is lost. If your OBS source is still 482 high, make it **554** (8 rows are listed now). From then on, restarting it is enough.
+
+To update by hand at any time, do the same. To stop it updating itself, add `--no-update` at the end of the line in the start file.
 
 ## Where it keeps things
 
