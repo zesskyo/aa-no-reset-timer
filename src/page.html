@@ -205,7 +205,9 @@ function render() {
   const bd = (i, j) => best && best.subDurs && best.subDurs[i] && best.subDurs[i][j] != null ? best.subDurs[i][j] : null;
   let onSub = null;   // the step it's on: {cur, i, j}, or {cur, mid: key} for a Midgame checklist split
   // the Midgame checklist's splits: the comparison's length, and the fastest
-  const mc = k => C && C.mid && C.mid[k] != null ? C.mid[k] : null, mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
+  // (the checklist's splits are always compared with the average: a PB often hasn't got one of them)
+  const AVG = S.comps.avg || C;
+  const mc = k => AVG && AVG.mid && AVG.mid[k] != null ? AVG.mid[k] : null, mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
   // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site; places they left a
   // few seconds ago still count): its splits (shown for a minute after they finish), and its counters. The split it's on
   // (in its area, or being worked on now) is the blue one, with what's left of it under it. Under Post-endgame, what of
@@ -350,7 +352,8 @@ function render() {
   const segC = onSub ? (onSub.mid ? mc(onSub.mid) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
   const segB = onSub ? (onSub.mid ? mb(onSub.mid) : bd(onSub.i, onSub.j)) : on ? b(on.i) : null;
   put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
-  put($("segComp"), C && on && comp !== "best" ? `${esc(C.short)}: ${segC != null ? fmt(segC) : "—"}` : "");
+  const segName = onSub && onSub.mid ? (AVG ? AVG.short : "") : C ? C.short : "";
+  put($("segComp"), C && on && (comp !== "best" || (onSub && onSub.mid)) ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
