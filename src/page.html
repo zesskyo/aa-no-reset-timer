@@ -271,7 +271,10 @@ function render() {
         else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
         const on = x === focus;
         if (on && !onSub) onSub = {mid: x.key, cur};
-        out.push({cls: "sub" + (on ? " on" : ""), icon: iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        // (a misc split, Adventuring Time or Cats lower down the list: its icon goes through what's still needed; the one
+        // it's on keeps its own, with its groups under it doing that)
+        const needIcons = !on && x.end == null && (x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []) : [];
+        out.push({cls: "sub" + (on ? " on" : ""), icon: needIcons.length ? cycle(x.key + "|row", needIcons) : iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
         info();

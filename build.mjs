@@ -22,7 +22,7 @@ for (const id of itemIds) {
   if (items.index[id] == null) throw new Error("items.json has no " + id);
   ITEM_ICONS["item:" + id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
 }
-for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunted"], ["2x2:", "two by two"]])
+for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunted"], ["2x2:", "two by two"], ["acc:", "acc"]])
   for (const f of fs.readdirSync(path.join(A, "icons", dir))) if (f.endsWith(".png")) ITEM_ICONS[prefix + f.slice(0, -4)] = png(path.join(A, "icons", dir, f));
 // (the icon files named after a biome's newer name: the game's 1.16 one is used in the checklist)
 ITEM_ICONS["at:snowy_tundra"] = ITEM_ICONS["at:snowy_plains"];
