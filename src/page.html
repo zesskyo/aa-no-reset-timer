@@ -280,14 +280,22 @@ function render() {
         // (each with the icon of something missing in it, taking turns)
         info();
         // (more to do alongside it, not timed: Snowy's "While Curing", the icons of what's left taking turns)
-        if (on && x.extra && x.extra[1] < x.extra[2]) out.push({cls: "sub part", icon: x.extra[3].length ? cycle(x.key + "|extra", x.extra[3]) : null, name: x.extra[0], d: `${x.extra[1]}/${x.extra[2]}`, dc: "prog", tm: ""});
+        // (Snowy's Zombie Doctor: with what's often done while curing, its count and its icons, on its own line: see extra)
+        // (and Snowy's only kill, the stray, in it too, rather than a line of its own)
+        const kills = on && x.extra ? (x.parts || []).find(p => p[0] === "Kills") : null;
+        const xh = x.extra ? x.extra[1] + (kills ? kills[1] : 0) : 0, xn = x.extra ? x.extra[2] + (kills ? kills[2] : 0) : 0, xi = x.extra ? [...x.extra[3], ...(kills ? kills[3] : [])] : [];
+        const extraRow = on && x.extra && (x.extra[1] < x.extra[2] || kills) ? {cls: "sub part", icon: xi.length ? cycle(x.key + "|extra", xi) : null, name: x.extra[0], d: `${xh}/${xn}`, dc: "prog", tm: ""} : null;
+        let extraPut = false;
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
         // (but not one that just says the same as the split's own row: Cats 5/11 under Cats 5/11)
         const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
         if (on && x.parts && !same && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
           const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
+          if (extraRow && n === extraRow.name) { out.push(extraRow); extraPut = true; continue; }
+          if (extraRow && kills && n === "Kills") continue;
           out.push({cls: "sub part", icon: ic, name: n, d: k > 1 ? `${h}/${k}` : "", dc: "prog", tm: ""});
         }
+        if (extraRow && !extraPut) out.push(extraRow);   // (Zombie Doctor all that's left: on its own)
       }
     }
     else if (i === 4) {
