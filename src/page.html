@@ -254,10 +254,10 @@ function render() {
       // (from the ghost file while playing: swimming or below sea level; or else seagrass or kelp broken, drowned killed)
       const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && S.igt - midgame.underwater < 10000));
       const wetKey = wet ? ["shells", "trident"].find(k => { const y = midgame.sections.find(z => z.key === k); return y && y.split && y.end == null; }) : null;
-      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : x.pin ? 7 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : x.pin ? 7 : recent(x) ? 5 : 6;
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
-      const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x))) || null;
+      const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x) || here(x))) || null;
       // (nothing for the checklist where they are: just Midgame, with its time in the comparison)
       if (!focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
