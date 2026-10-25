@@ -212,7 +212,7 @@ function render() {
   // the checklist is still not done.
   const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
   // (a checklist item's icon: an item, or one of the stats site's own, like "mh:zoglin")
-  const iconOf = it => it.includes(":") ? it : "item:" + it;
+  const iconOf = it => it.startsWith("icon:") ? it.slice(5) : it.includes(":") ? it : "item:" + it;
   // Going through icons (what's still needed for a split), a new one every 1.5 seconds, in a random order that keeps
   // going where it was when something's done or the page redraws
   const cycles = cycleStore;
@@ -241,18 +241,19 @@ function render() {
       const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
       const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
       // (Temperate, the least of them: only while something's being done for it)
-      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || now2(x) || x.key !== "animals" && x.area.some(a => near.includes(a))
+      // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
+      const shown = midgame.sections.filter(x => x.key !== "debris" && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
         && (x.split ? x.end == null && (x.done == null || x.start != null) : x.need == null ? x.have > 0 : x.done == null)));   // (done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
       // (in the Nether, Nether Misc first after that); then the rest, the same way
       const here = x => x.area.includes(midgame.area);
-      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.pin ? 7 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
-      const focus = shown.find(x => x.split && x.end == null) || null;
+      const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x))) || null;
       // (nothing for the checklist where they are: just Midgame, with its time in the comparison)
-      if (!focus && !shown.some(justDone)) return out;
+      if (!focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
