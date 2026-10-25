@@ -240,7 +240,8 @@ function render() {
       const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
       const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
       const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
-      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || now2(x) || x.area.some(a => near.includes(a))
+      // (Temperate, the least of them: only while something's being done for it)
+      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || now2(x) || x.key !== "animals" && x.area.some(a => near.includes(a))
         && (x.split ? x.end == null && (x.done == null || x.start != null) : x.need == null ? x.have > 0 : x.done == null)));   // (done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
@@ -250,6 +251,8 @@ function render() {
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
       const focus = shown.find(x => x.split && x.end == null) || null;
+      // (nothing for the checklist where they are: just Midgame, with its time in the comparison)
+      if (!focus && !shown.some(justDone)) return out;
       for (const x of shown) {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
