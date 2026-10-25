@@ -239,15 +239,17 @@ function render() {
       // under the Debris split)
       const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
       const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
-      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || x.area.some(a => near.includes(a))
+      const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
+      const shown = midgame.sections.filter(x => x.key !== "debris" && (justDone(x) || now2(x) || x.area.some(a => near.includes(a))
         && (x.split ? x.end == null && (x.done == null || x.start != null) : x.need == null ? x.have > 0 : x.done == null)));   // (done, and ends on leaving: still up until then)
-      // in order: just finished; then what something was done for in the last 2 minutes (latest first: a ghast just
-      // killed puts Uneasy Alliance first); then Nether Misc, and the rest in the checklist's order
-      const rank = x => justDone(x) ? 0 : recent(x) ? 1 : x.key === "nethermisc" ? 2 : 3;
-      shown.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
-      // (the one it's on: the first not finished, counting time now or in the area they're in)
-      const running = x => x.split && x.end == null && x.since != null;
-      const focus = shown.find(x => x.split && x.end == null && (recent(x) || running(x) || x.area.includes(midgame.area))) || shown.find(running) || null;
+      // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
+      // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
+      // (in the Nether, Nether Misc first after that); then the rest, the same way
+      const here = x => x.area.includes(midgame.area);
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
+      shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
+      // (the one it's on: the first not finished)
+      const focus = shown.find(x => x.split && x.end == null) || null;
       for (const x of shown) {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: v}); };
