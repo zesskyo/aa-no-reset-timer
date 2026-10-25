@@ -122,11 +122,17 @@ let site = null;   // {api, comps, icons, title, runs, fetchedAt}
 let siteData = {runs: []}, siteAt = null;   // (the last stats site download, to add new runs of our own to)
 // The runs finished with AA Live (runs/ in its folder), and those of the stats site (if there's one); a run on both
 // counts once. Ours are numbered after the site's.
+// (the same world: the same player and the same first advancements, to the millisecond. Not its start: that's when the
+// world was last opened, so it moves when the world is opened again after the run, e.g. for /seed)
+const worldOf = r => r.player + "|" + (r.events || []).slice(0, 5).map(e => Array.isArray(e) ? e.join("|") : e).join(",");
+const sameRun = (a, b) => a.player === b.player && (a.start === b.start || worldOf(a) === worldOf(b));
 function localRuns(siteRuns) {
-  const has = new Set(siteRuns.map(r => r.start + "|" + r.player));
+  const has = new Set(siteRuns.map(r => r.start + "|" + r.player)), worlds = new Set(siteRuns.map(worldOf));
   let num = Math.max(0, ...siteRuns.map(r => (r.meta && r.meta.num) || 0));
   const out = [];
-  for (const f of fs.readdirSync(path.join(OWN, "runs")).filter(f => f.endsWith(".json"))) { const r = readJson(path.join(OWN, "runs", f)); if (r && r.events && !has.has(r.start + "|" + r.player)) out.push(r); }
+  // (the latest copy of each world: one saved again after it was opened again)
+  const files = fs.readdirSync(path.join(OWN, "runs")).filter(f => f.endsWith(".json")).map(f => readJson(path.join(OWN, "runs", f))).filter(r => r && r.events);
+  for (const r of files.sort((a, b) => b.start - a.start)) if (!has.has(r.start + "|" + r.player) && !worlds.has(worldOf(r))) { out.push(r); worlds.add(worldOf(r)); }
   return out.sort((a, b) => a.start - b.start).map(r => ({...r, meta: {...(r.meta || {}), num: ++num, local: true}}));
 }
 function loadSite(data, fetchedAt) {
@@ -464,7 +470,7 @@ function compute() {
     if (i >= 0) rows[i].from = rows[i].start = i === 0 ? 0 : Math.max(0, ...rows.slice(0, i).filter(r => r.end != null).map(r => r.end));
   }
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
-  const known = api.RUNS.find(r => r.start === run.start && r.player === run.player);
+  const known = api.RUNS.find(r => sameRun(r, run));
   const num = known ? api.runNum(known) : site.nextNum;
   // a Hermes that doesn't log biomes (before 0.14): the page says to update it (after a minute of the world, so it's
   // not said before the first biome line comes)
