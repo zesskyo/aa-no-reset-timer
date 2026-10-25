@@ -269,7 +269,9 @@ function render() {
         // (each with the icon of something missing in it, taking turns)
         info();
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
-        if (on && x.parts && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
+        // (but not one that just says the same as the split's own row: Cats 5/11 under Cats 5/11)
+        const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
+        if (on && x.parts && !same && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
           const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
           out.push({cls: "sub part", icon: ic, name: n, d: "", dc: "", tm: k > 1 ? `${h}/${k}` : ""});
         }
