@@ -94,7 +94,7 @@ After `node app/aa-live.mjs` (or add them to the end of the line in the start fi
 - **The live log:** while you play, Hermes writes the play log ciphered, to `saves/<world>/hermes/restricted/play.log.enc`; each line is ciphered on its own, and `src/rotator.mjs` undoes it.
 - **The splits:** the whole log is read again at most once a second, with the code of [aa-stats](https://github.com/zesskyo/aa-stats) (which is inside `app/aa-live.mjs`), so the splits match an aa-stats site exactly.
 - **The timer:** SpeedRunIGT's retimed IGT from the latest line of the log, counted up while the game isn't paused.
-- **Finished:** 80/80, or 79/80 with only Very Very Frightening missing once a channeling trident has been in the inventory (Thunderless).
+- **Finished:** 80/80, or 79/80 with only Very Very Frightening missing once a channeling trident (or a Channeling book and a trident) has been in the inventory (Thunderless).
 
 ## Changing it
 
