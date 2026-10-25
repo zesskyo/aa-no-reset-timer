@@ -24,6 +24,7 @@ import { rotate } from "./rotator.mjs";
 
 // (gen.mjs puts these in)
 const SITE_CODE = /*SITE_CODE*/"";
+const GHOST = new Function(/*GHOST_CODE*/"")();
 const PAGE = /*PAGE*/"";
 const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' and the Midgame checklist's icons (see build.mjs)
 const BASE_ICONS = /*BASE_ICONS*/{};   // the splits' own icons, for when there's no stats site to take them from
@@ -305,6 +306,29 @@ function ghostWet() {
   } catch { return null; }
 }
 
+// Deep in the Nether (below y 25, where debris is mined): from the whole ghost file, every 10 seconds or so, so the
+// Debris split starts when they go down there rather than at the first debris. (Replaying a log: a .ghost beside it.)
+let deepCache = {f: null, size: -1, clock: 0, at: 0, deep: []};
+function ghostDeep(run) {
+  try {
+    let f = null;
+    if (REPLAY) { const g = path.resolve(REPLAY.replace(/^~(?=\/)/, home)).replace(/\.log(\.enc)?$/, ".ghost"); if (g.endsWith(".ghost") && fs.existsSync(g)) f = g; }
+    else if (world) {
+      const dir = path.join(world, "hermes", "ghosts");
+      f = fs.readdirSync(dir).filter(x => x.endsWith(".ghost")).map(x => path.join(dir, x)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0] || null;
+    }
+    if (!f) return [];
+    const size = fs.statSync(f).size;
+    // (again when there's more of it, or more of the log to line it up with)
+    const clock = (run.clock || []).length;
+    if (f !== deepCache.f || ((size !== deepCache.size || clock !== deepCache.clock) && Date.now() - deepCache.at > 10000)) {
+      const g = GHOST.readGhost(fs.readFileSync(f), run);
+      deepCache = {f, size, clock, at: Date.now(), deep: g ? GHOST.deepTimes(g) : []};
+    }
+    return deepCache.deep;
+  } catch { return []; }
+}
+
 // What the timer needs, from each line (cheaply): the IGT, whether the world is open, and whether the game is paused
 function watchLine(line) {
   if (!line.startsWith('{"time":')) return;
@@ -410,6 +434,7 @@ function compute() {
   if (!text) return empty;
   let run;
   try { run = api.parseLog(text, "play.log"); } catch { return empty; }
+  run.st.deep = ghostDeep(run).filter(t => t <= run.finalIgt);   // (a replay: only what has happened so far)
   // finished: everything done, or everything but Very Very Frightening once a channeling trident has been in the
   // inventory (Thunderless: waiting for thunder is then optional; if it still comes, the timer carries on)
   // (the stats site's own rule: a run that counts as Thunderful or Thunderless there)

@@ -42,6 +42,8 @@ const rot = rd(path.join(here, "src/rotator.mjs")).replace("export function rota
 const put = (k, v) => { if (!s.includes(k)) throw new Error("server.mjs has no " + k); s = s.replace(k, () => v); };
 put('import { rotate } from "./rotator.mjs";', "\n" + rot);
 put('/*SITE_CODE*/""', JSON.stringify(SITE));
+// (and its ghost file reader: when the player is deep in the Nether, for the Debris split)
+put('/*GHOST_CODE*/""', JSON.stringify(rd(path.join(A, "ghost.mjs")).replace(/export function/g, "function") + "\nreturn {readGhost, deepTimes};"));
 put('/*PAGE*/""', JSON.stringify(page));
 put('/*ITEM_ICONS*/{}', JSON.stringify(ITEM_ICONS));
 put('/*BASE_ICONS*/{}', JSON.stringify(BASE_ICONS));
