@@ -66,7 +66,7 @@ Double-click **app\Replay a run.bat** (Windows) or **app/Replay a run.command** 
 
 It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits (in your browser), and updates the next time you start it.
 
-> **Downloaded AA Live before it updated itself (before version 1.0)?** Update by hand once: close AA Live's window, download the ZIP again (**Code › Download ZIP**), unzip it and replace your old folder with it. Your settings and finished runs are kept elsewhere (see below), so nothing is lost. If your OBS source is still 482 high, make it **554** (8 rows are listed now). From then on, restarting it is enough.
+> **Downloaded AA Live before 25 October 2026?** It didn't update itself yet, so update it by hand once: close AA Live's window, download the ZIP again (**Code › Download ZIP**), unzip it and replace your old folder with it. Your settings and finished runs are kept elsewhere (see below), so nothing is lost. If your OBS source is still 482 high, make it **554** (8 rows are listed now). From then on, restarting it is enough.
 
 To update by hand at any time, do the same. To stop it updating itself, add `--no-update` at the end of the line in the start file.
 
