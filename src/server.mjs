@@ -283,6 +283,28 @@ function readNew() {
   changed = true;
 }
 
+// Underwater now: from the end of the world's ghost file (Hermes' position every tick: swimming, or below sea level),
+// when it's written as the game goes. (The page only uses it in the ocean.) Real time of the last tick that was.
+const SEA = 62, REC = 46;
+function ghostWet() {
+  if (REPLAY || !world) return null;
+  try {
+    const dir = path.join(world, "hermes", "ghosts");
+    const f = fs.readdirSync(dir).filter(x => x.endsWith(".ghost")).map(x => path.join(dir, x)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    if (!f) return null;
+    const size = fs.statSync(f).size, n = Math.min(Math.floor(size / REC), 20 * 15);   // (the last 15 seconds or so)
+    if (!n) return null;
+    const buf = Buffer.alloc(n * REC), fd = fs.openSync(f, "r");
+    try { fs.readSync(fd, buf, 0, buf.length, Math.floor(size / REC) * REC - buf.length); } finally { fs.closeSync(fd); }
+    let last = null;
+    for (let i = 0; i < n; i++) {
+      const o = i * REC, y = buf.readDoubleBE(o + 16), flags = buf[o + 45];
+      if ((flags & 0x80) || y < SEA) last = Number(buf.readBigInt64BE(o));
+    }
+    return last;
+  } catch { return null; }
+}
+
 // What the timer needs, from each line (cheaply): the IGT, whether the world is open, and whether the game is paused
 function watchLine(line) {
   if (!line.startsWith('{"time":')) return;
@@ -423,7 +445,8 @@ function compute() {
   // not said before the first biome line comes)
   const hv = /"hermes_version":"([^"]+)"/.exec(text);
   const oldHermes = run.st.noBiomes && end > 60000 ? (hv ? hv[1].replace(/\+.*/, "") : "?") : null;
-  return {...base, num, done: done0, igt: end, splits: rows, oldHermes};
+  const wetAt = ghostWet();
+  return {...base, num, done: done0, igt: end, splits: rows, oldHermes, wet: wetAt != null && Date.now() - wetAt < 10000};
 }
 
 // ---------- The page ----------

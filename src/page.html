@@ -250,7 +250,11 @@ function render() {
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
       // (in the Nether, Nether Misc first after that); then the rest, the same way
       const here = x => x.area.includes(midgame.area);
-      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.pin ? 7 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
+      // (underwater in the last 10 seconds, in the ocean: the shells first, or the trident once they're done)
+      // (from the ghost file while playing: swimming or below sea level; or else seagrass or kelp broken, drowned killed)
+      const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && S.igt - midgame.underwater < 10000));
+      const wetKey = wet ? ["shells", "trident"].find(k => { const y = midgame.sections.find(z => z.key === k); return y && y.split && y.end == null; }) : null;
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : x.pin ? 7 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : 6;
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
       const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x))) || null;
