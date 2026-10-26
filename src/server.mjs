@@ -262,14 +262,14 @@ function reset(w) {
   log(w ? "World: " + w : "Waiting for Minecraft (Hermes)…");
 }
 
-function readNew() {
+function readNew(sameWorld) {
   if (REPLAY) return replayTick();
-  const w = findWorld();
-  if (w !== world) reset(w);
+  if (!sameWorld) { const w = findWorld(); if (w !== world) reset(w); }
   if (!world) return;
   const enc = path.join(world, "hermes", "restricted", "play.log.enc"), dec = path.join(world, "hermes", "play.log");
   const f = fs.existsSync(enc) ? enc : fs.existsSync(dec) ? dec : null;
   if (!f) return;
+  watchLog(path.dirname(f));
   if (f !== file) { file = f; plain = f === dec; offset = 0; rest = Buffer.alloc(0); text = ""; }
   let size; try { size = fs.statSync(f).size; } catch { return; }
   if (size < offset) { offset = 0; rest = Buffer.alloc(0); text = ""; }   // (started again)
@@ -288,6 +288,16 @@ function readNew() {
   text += t;
   for (const line of t.split("\n")) watchLine(line);
   changed = true;
+}
+
+// Read as soon as the game writes to the log (the system says when), not just on the next check
+let watched = null, watcher = null;
+function watchLog(dir) {
+  if (watched === dir) return;
+  try { if (watcher) watcher.close(); } catch {}
+  watcher = null; watched = dir;
+  try { watcher = fs.watch(dir, (ev, name) => { if (!name || String(name).startsWith("play.log")) tick(true); }); } catch {}   // (if not, the 100 ms check still reads it)
+  if (watcher) watcher.on("error", () => { try { watcher.close(); } catch {} watcher = watched = null; });
 }
 
 // Underwater now: from the end of the world's ghost file (Hermes' position every tick: swimming, or below sea level),
@@ -540,12 +550,13 @@ if (REPLAY) loadReplay().catch(e => { console.error("Couldn't play back " + REPL
 setInterval(fetchSite, 30 * 60000);
 // (pausing, unpausing and opening or closing the world go to the page straight away, without the splits)
 let quickSent = "";
-setInterval(() => {
-  try { readNew(); } catch (e) { log("Couldn't read the play log: " + e.message); }
+function tick(sameWorld) {
+  try { readNew(sameWorld); } catch (e) { log("Couldn't read the play log: " + e.message); }
   const q = JSON.stringify({open, paused, anchor});
   if (q !== quickSent) { quickSent = q; const msg = "event: quick\ndata: " + q + "\n\n"; for (const c of clients) c.write(msg); }
   // the splits are worked out again at most once a second (the whole log is read each time)
   if (changed && Date.now() - lastParse >= 1000) { changed = false; lastParse = Date.now(); update(); }
-}, 100);
+}
+setInterval(tick, 100);
 // keep OBS's connection alive
 setInterval(() => { for (const c of clients) c.write(": .\n\n"); }, 15000);
