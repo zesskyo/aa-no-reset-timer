@@ -368,11 +368,12 @@ function render() {
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
   // the split it's on (or the step of it, when it has sub-splits): its time so far, and the comparison's and the best
   const segCur = onSub ? onSub.cur : on ? on.cur : null;
-  const segC = onSub ? (onSub.mid ? mc(onSub.mid) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
+  // (a Midgame checklist split: the comparison's own time for it, though its delta in the list is against Average)
+  const segC = onSub ? (onSub.mid ? (C && C.mid ? (C.mid[onSub.mid] ?? null) : mc(onSub.mid)) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
   const segB = onSub ? (onSub.mid ? mb(onSub.mid) : bd(onSub.i, onSub.j)) : on ? b(on.i) : null;
   put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
-  const segName = onSub && onSub.mid ? (AVG ? AVG.short : "") : C ? C.short : "";
-  put($("segComp"), C && on && (comp !== "best" || (onSub && onSub.mid)) ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
+  const segName = onSub && onSub.mid && !(C && C.mid) ? (AVG ? AVG.short : "") : C ? C.short : "";
+  put($("segComp"), C && on && comp !== "best" ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
