@@ -373,8 +373,7 @@ function render() {
   put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
   const segName = onSub && onSub.mid ? (AVG ? AVG.short : "") : C ? C.short : "";
   put($("segComp"), C && on && (comp !== "best" || (onSub && onSub.mid)) ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
-  // (comparing with Average: just that, no Best line)
-  put($("segBest"), on && best && comp !== "avg" ? `Best: ${segB != null ? fmt(segB) : "—"}` : "&nbsp;");
+  put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
   const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
