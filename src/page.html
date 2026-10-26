@@ -115,11 +115,16 @@ document.documentElement.style.setProperty("--bg-alpha", bg / 100);
 if (!window.obsstudio && !Number.isFinite(bgParam)) document.documentElement.style.background = "#000";
 // (in OBS, nothing scrolls: the source shows the top of the page)
 if (window.obsstudio) document.documentElement.style.overflow = "hidden";
-// ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1)
+// ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1, or the OBS source's width)
 // (without it, in a browser narrower than that, a phone say, it's made to fit)
 const scale = parseFloat(P.get("scale"));
 // (a phone counts the page's own width as the window's, so its screen's width is used too)
-const fit = () => { const w = Math.min(innerWidth, screen.width || innerWidth); const z = Number.isFinite(scale) && scale > 0 ? scale : !window.obsstudio && w < 440 ? w / 440 : 1; document.querySelector(".split").style.zoom = z; };
+// (in OBS it fills the browser source's width, if that's wider: longer names fit)
+const fit = () => {
+  const w = Math.min(innerWidth, screen.width || innerWidth), z = Number.isFinite(scale) && scale > 0 ? scale : !window.obsstudio && w < 440 ? w / 440 : 1, el = document.querySelector(".split");
+  el.style.zoom = z;
+  el.style.width = window.obsstudio ? Math.max(440, Math.floor(innerWidth / z)) + "px" : "";
+};
 fit(); addEventListener("resize", fit);
 const cycleStore = new Map();   // (see cycle in render)
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
