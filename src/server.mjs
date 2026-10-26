@@ -538,10 +538,14 @@ reset(null);
 fetchSite();
 if (REPLAY) loadReplay().catch(e => { console.error("Couldn't play back " + REPLAY + ": " + e.message); process.exit(1); });
 setInterval(fetchSite, 30 * 60000);
+// (pausing, unpausing and opening or closing the world go to the page straight away, without the splits)
+let quickSent = "";
 setInterval(() => {
   try { readNew(); } catch (e) { log("Couldn't read the play log: " + e.message); }
+  const q = JSON.stringify({open, paused, anchor});
+  if (q !== quickSent) { quickSent = q; const msg = "event: quick\ndata: " + q + "\n\n"; for (const c of clients) c.write(msg); }
   // the splits are worked out again at most once a second (the whole log is read each time)
   if (changed && Date.now() - lastParse >= 1000) { changed = false; lastParse = Date.now(); update(); }
-}, 250);
+}, 100);
 // keep OBS's connection alive
 setInterval(() => { for (const c of clients) c.write(": .\n\n"); }, 15000);

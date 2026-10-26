@@ -154,6 +154,8 @@ $("rpSpeeds").innerHTML = SPEEDS.map(x => `<button data-speed="${x}">${x}×</but
 $("rpSpeeds").onclick = e => { const b = e.target.closest("button"); if (b) replayTo({speed: b.dataset.speed}); };
 const es = new EventSource("/events");
 es.onmessage = e => { S = JSON.parse(e.data); connected = true; render(); };
+// (paused or unpaused just now: ahead of the next full update)
+es.addEventListener("quick", e => { if (S && !S.replay) { Object.assign(S, JSON.parse(e.data)); render(); } });
 es.onerror = () => { connected = false; render(); };
 
 // clicking the comparison changes it
@@ -170,7 +172,8 @@ $("segComp").onclick = () => {
 let shown = 0;
 function liveIgt() {
   if (!S) return 0;
-  if (S.done || !S.anchor || !S.open || S.paused) return shown = S.igt;
+  if (S.done || !S.anchor || !S.open) return shown = S.igt;
+  if (S.paused) return shown = Math.max(S.igt, S.anchor.igt);   // (the IGT it was paused at)
   const t = Math.max(S.igt, S.anchor.igt + (Date.now() - S.anchor.wall) * (S.rate || 1));   // (rate: a run played back faster)
   return shown = t < shown && shown - t < 2000 ? shown : t;
 }
