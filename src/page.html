@@ -202,23 +202,24 @@ function render() {
   const rows = S.splits.map((r, i) => ({...r, i, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
   const ri = rows.findIndex(r => r.from != null);
   rows.forEach(r => { r.fin = S.done ? r.has : r.has && r.from == null && ri >= 0 && r.i < ri; r.on = r.i === ri; });
-  // On PB pace: the last split finished at or ahead of the PB's time for it, and the one it's on not yet past the PB's
+  // On PB (or WR) pace: the last split finished at or ahead of its time for it, and the one it's on not yet past its
   // (so it only changes at the end of a split, or once it falls behind in one: it doesn't flick back and forth)
-  const onPace = (() => {
-    if (!pb || !pb.ends) return false;
+  const onPace = x => {
+    if (!x || !x.ends) return false;
     let ahead = null;
     for (const r of rows) {
-      if (r.fin && r.end != null && pb.ends[r.i] != null) ahead = r.end <= pb.ends[r.i];
-      if (r.on && pb.ends[r.i] != null && now > pb.ends[r.i]) ahead = false;
+      if (r.fin && r.end != null && x.ends[r.i] != null) ahead = r.end <= x.ends[r.i];
+      if (r.on && x.ends[r.i] != null && now > x.ends[r.i]) ahead = false;
     }
     return ahead === true;
-  })();
-  const key = comp === "auto" ? (onPace ? "pb" : S.comps.avg ? "avg" : "pb") : comp;
+  };
+  const key = comp === "auto" ? (onPace(wr) ? "wr" : onPace(pb) ? "pb" : S.comps.avg ? "avg" : "pb") : comp;
   const C = S.comps[key] || S.comps[ORDER.find(k => S.comps[k])] || null;
   // (what it's compared with, at the top: "auto" says so, and stands out on PB pace)
   const vs = $("vsT");
-  put(vs, C ? (comp === "auto" ? "Auto: " + esc(C === pb ? "PB" : C.short === "Average" ? "Avg" : C.short) : "vs " + esc(C.short === "Average" ? "Avg" : C.short)) : "");
-  vs.classList.toggle("pace", comp === "auto" && C === pb && !!pb);
+  const short = C ? (C.short === "Average" ? "Avg" : C.short) : "";
+  put(vs, C ? (comp === "auto" ? "Auto: " : "vs ") + esc(short) : "");
+  vs.classList.toggle("pace", comp === "auto" && !!C && (C === pb || C === wr));
   const c = i => C && C.splits[i] != null ? C.splits[i] : null, b = i => best && best.splits[i] != null ? best.splits[i] : null;
   const ce = i => C && C.ends && C.ends[i] != null ? C.ends[i] : null;
 
@@ -303,7 +304,10 @@ function render() {
         if (on && !onSub) onSub = {mid: x.key, cur};
         // (a misc split, Adventuring Time or Cats lower down the list: its icon goes through what's still needed; the one
         // it's on keeps its own, with its groups under it doing that)
-        const needIcons = !on && x.end == null && (x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []) : [];
+        // (nor one whose only group says the same as its row, Cats 5/11 or Adventuring Time's biomes: then its own icon
+        // goes through what's left, as there's nothing under it to)
+        const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
+        const needIcons = x.end == null && (on ? same : x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []) : [];
         out.push({cls: "sub" + (on ? " on" : ""), icon: needIcons.length ? cycle(x.key + "|row", needIcons) : iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
@@ -317,7 +321,6 @@ function render() {
         let extraPut = false;
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
         // (but not one that just says the same as the split's own row: Cats 5/11 under Cats 5/11)
-        const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
         if (on && x.parts && !same && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
           const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
           if (extraRow && n === extraRow.name) { out.push(extraRow); extraPut = true; continue; }
@@ -385,8 +388,24 @@ function render() {
   });
 
   // what's left, going by the comparison (pace) and by the best segments (best possible time)
-  const left = f => rows.filter(r => !r.fin).reduce((a, r) => a + Math.max(0, (f(r.i) ?? 0) - r.cur), 0);
-  const pace = C ? now + left(c) : null, possible = best ? now + left(b) : null;
+  // the split it's on, by its sub-splits: what the comparison took for each step not done yet (less the time on it so
+  // far), and for the time between steps what's left of its; a step done faster or slower than usual counts straight
+  // away, not at the end of the split. (fd: the comparison's step durations. Without them all, or for Midgame, whose
+  // checklist splits overlap and don't add up to it: the whole split, as below)
+  const leftOn = (r, f, fd) => {
+    const whole = Math.max(0, (f(r.i) ?? 0) - r.cur);
+    if (f(r.i) == null) return whole;
+    let parts = null;
+    if (r.subs && r.subs.length) {
+      const next = r.subs.findIndex(x => x.t == null);
+      parts = r.subs.map((x, j) => ({D: fd(r.i, j), done: x.t != null, cur: x.t != null ? x.dur ?? 0 : j === next && onSub && onSub.i === r.i ? onSub.cur : 0}));
+    }
+    if (!parts || !parts.length || parts.some(p => !p.done && p.D == null)) return whole;
+    const tail = Math.max(0, f(r.i) - parts.reduce((a, p) => a + (p.D ?? p.cur), 0)), between = Math.max(0, r.cur - parts.reduce((a, p) => a + p.cur, 0));
+    return parts.filter(p => !p.done).reduce((a, p) => a + Math.max(0, p.D - p.cur), 0) + Math.max(0, tail - between);
+  };
+  const left = (f, fd) => rows.filter(r => !r.fin).reduce((a, r) => a + (r.on ? leftOn(r, f, fd) : Math.max(0, (f(r.i) ?? 0) - r.cur)), 0);
+  const pace = C ? now + left(c, cd) : null, possible = best ? now + left(b, bd) : null;
   const on = rows[ri];
   const t = $("timer");
   put(t, fmtMs(now, true));

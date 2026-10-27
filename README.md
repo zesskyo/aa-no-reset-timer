@@ -40,7 +40,7 @@ Options go after the link, like `http://localhost:7476/?bg=60&ms=1`:
 | `?ms=1` | the decimals the timer shows: `1` tenths, `2` hundredths, `0` none (3 without it) |
 | `?rows=10` | how many splits are listed at once (8 without it; each one is 36 pixels more or less) |
 | `?scale=1.5` | 1.5 times bigger (multiply the width and height too) |
-| `?comp=avg` | what it compares with: `auto` (the default: the average, and the PB while the run's on PB pace), `pb`, `avg`, `best`, `worst` or `wr`. It's shown at the top ("Auto: PB", "vs Avg"…); in a browser, click it to change |
+| `?comp=avg` | what it compares with: `auto` (the default: the average, the PB while the run's on PB pace, and the WR while it's on WR pace), `pb`, `avg`, `best`, `worst` or `wr`. It's shown at the top ("Auto: PB", "Auto: WR", "vs Avg"…); in a browser, click it to change |
 
 After updating AA Live, right-click the source › **Refresh**.
 
