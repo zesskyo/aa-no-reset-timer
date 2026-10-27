@@ -326,7 +326,8 @@ function ghostWet() {
 
 // From the whole ghost file, every 10 seconds or so (every 2 in The End, waiting for the gateway): when they were deep in
 // the Nether (below y 25, where debris is mined), so the Debris split starts when they go down there rather than at the
-// first debris, and when they got to the outer End, where Any% ends. (Replaying a log: a .ghost beside it.)
+// first debris, when they got to the outer End, where Any% ends, and to their base before a campfire there, where
+// Endgame starts. (Replaying a log: a .ghost beside it.)
 let ghostCache = {f: null, size: -1, clock: 0, at: 0, facts: {}};
 function ghostFacts(run) {
   try {
@@ -342,7 +343,7 @@ function ghostFacts(run) {
     const clock = (run.clock || []).length;
     if (f !== ghostCache.f || ((size !== ghostCache.size || clock !== ghostCache.clock) && Date.now() - ghostCache.at > ((run.dims[run.dims.length - 1] || [])[1] === "e" ? 2000 : 10000))) {
       const g = GHOST.readGhost(fs.readFileSync(f), run);
-      ghostCache = {f, size, clock, at: Date.now(), facts: g ? GHOST.ghostFacts(g) : {}};
+      ghostCache = {f, size, clock, at: Date.now(), facts: g ? GHOST.ghostFacts(g, run.st) : {}};
     }
     return ghostCache.facts;
   } catch { return {}; }
@@ -525,6 +526,7 @@ function compute() {
   const gf = ghostFacts(run);
   run.st.deep = (gf.deep || []).filter(t => t <= run.finalIgt);
   if (gf.outerEnd != null && (!REPLAY || gf.outerEnd <= run.finalIgt + 1000)) run.st.outerEnd = gf.outerEnd;
+  if (gf.campArrive) run.st.campArrive = gf.campArrive;
   // finished: everything done, or everything but Very Very Frightening once a channeling trident has been in the
   // inventory (Thunderless: waiting for thunder is then optional; if it still comes, the timer carries on)
   // (the stats site's own rule: a run that counts as Thunderful or Thunderless there)
