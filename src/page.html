@@ -298,7 +298,7 @@ function render() {
         const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
-        else if (x.end == null && cmp != null && cur > cmp) { d = delta(cur - cmp); dc = "behind"; }
+        else if (x.end == null && cmp != null && (cur > cmp || (mb(x.key) != null && cur > mb(x.key)))) { d = delta(cur - cmp); dc = colour(cur - cmp, false); }
         else { d = x.need > 1 ? `${x.have}/${x.need}` : ""; dc = "prog"; }
         const on = x === focus;
         if (on && !onSub) onSub = {mid: x.key, cur};
@@ -345,8 +345,9 @@ function render() {
     if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
     const more = r.on && !(r.subs && r.subs.length) && (r.i === 3 || r.i === 4 || r.i === rows.length - 1) ? checklist(r.i) : [];
     const open = r.on && (r.subs && r.subs.length || more.length);
-    // the split it's on: shown once it's behind (unless its sub-splits are showing that)
-    if (r.d == null && r.on && !open && ce(r.i) != null && now > ce(r.i)) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
+    // the split it's on: shown once it's behind, or (like LiveSplit) once it's taken longer than its best ever, so it can
+    // only lose time from there (also with its sub-splits or checklist open under it)
+    if (r.d == null && r.on && ce(r.i) != null && (now > ce(r.i) || (b(r.i) != null && r.cur > b(r.i)))) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
     // the time: when it ended, for a finished split; otherwise the comparison's
     list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon: r.icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
     if (!open) continue;
@@ -360,7 +361,7 @@ function render() {
       const cmp = cs(r.i, j);
       let sd = "", sc = "";
       if (x.t != null && cmp != null) { const v = x.t - cmp; sd = delta(v); sc = colour(v, v <= pd, x.dur != null && bd(r.i, j) != null && x.dur < bd(r.i, j)); pd = v; }
-      else if (j === next && cmp != null && now > cmp) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
+      else if (j === next && cmp != null && (now > cmp || (bd(r.i, j) != null && onSub && onSub.cur > bd(r.i, j)))) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
       list.push({cls: "sub" + (j === next ? " on" : ""), icon: x.item ? "item:" + x.item : null, name: x.name, d: sd, dc: sc, tm: fmt(x.t != null ? x.t : cmp)});
     });
   }
@@ -409,7 +410,8 @@ function render() {
   const on = rows[ri];
   const t = $("timer");
   put(t, fmtMs(now, true));
-  const liveD = on && ce(on.i) != null && now > ce(on.i) ? now - ce(on.i) : prevD;
+  // (its colour: the split it's on, once that shows a time, else the last finished)
+  const liveD = on && ce(on.i) != null && (now > ce(on.i) || (b(on.i) != null && on.cur > b(on.i))) ? now - ce(on.i) : prevD;
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");
   // the split it's on (or the step of it, when it has sub-splits): its time so far, and the comparison's and the best
   const segCur = onSub ? onSub.cur : on ? on.cur : null;
