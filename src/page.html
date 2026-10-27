@@ -249,7 +249,8 @@ function render() {
   // the checklist is still not done.
   const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
   // (a checklist item's icon: an item, or one of the stats site's own, like "mh:zoglin")
-  const iconOf = it => it.startsWith("icon:") ? it.slice(5) : it.includes(":") ? it : "item:" + it;
+  // (the stats site's own icons are under "item:icon:<name>", like the rest of the checklist's: see build.mjs)
+  const iconOf = it => it.startsWith("icon:") || !it.includes(":") ? "item:" + it : it;
   // Going through icons (what's still needed for a split), a new one every 1.5 seconds, in a random order that keeps
   // going where it was when something's done or the page redraws
   const cycles = cycleStore;
@@ -312,7 +313,7 @@ function render() {
         // (nor one whose only group says the same as its row, Cats 5/11 or Adventuring Time's biomes: then its own icon
         // goes through what's left, as there's nothing under it to)
         const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
-        const needIcons = x.end == null && (on ? same : x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []) : [];
+        const needIcons = x.end == null && (on ? same : x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []).map(iconOf) : [];
         out.push({cls: "sub" + (on ? " on" : ""), icon: needIcons.length ? cycle(x.key + "|row", needIcons) : iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
@@ -327,7 +328,7 @@ function render() {
         // (one group only too, when it has several things missing to go through: "Biomes 2/6")
         // (but not one that just says the same as the split's own row: Cats 5/11 under Cats 5/11)
         if (on && x.parts && !same && (x.parts.length > 1 || (x.parts[0] && x.parts[0][3] && x.parts[0][3].length > 1))) for (const [n, h, k, icons] of x.parts) {
-          const ic = icons && icons.length ? cycle(x.key + "|" + n, icons) : null;
+          const ic = icons && icons.length ? cycle(x.key + "|" + n, icons.map(iconOf)) : null;
           if (extraRow && n === extraRow.name) { out.push(extraRow); extraPut = true; continue; }
           if (extraRow && kills && n === "Kills") continue;
           out.push({cls: "sub part", icon: ic, name: n, d: k > 1 ? `${h}/${k}` : "", dc: "prog", tm: ""});
