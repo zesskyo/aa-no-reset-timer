@@ -49,6 +49,16 @@ After updating AA Live, right-click the source › **Refresh**.
 - **On its own:** every run you finish with AA Live running is kept on your computer, and the next runs are compared with those (PB, average, best segments…). Until you've finished one, there's nothing to compare with.
 - **With a stats site:** if you have an [aa-stats](https://github.com/zesskyo/aa-stats) site of your runs (you can make one from [aa-stats-template](https://github.com/zesskyo/aa-stats-template)), put its link in the box under the splits (in your browser, not OBS) and press Save. AA Live then compares with the site's runs too, and with its world record, and numbers your runs after the site's.
 
+## Uploading runs to your stats site
+
+AA Live can add each run you finish to your [aa-stats](https://github.com/zesskyo/aa-stats) site by itself, like the site's own *Add run* (the log, ghost file and stats, with the date and seed):
+
+1. Make a GitHub token that can change your site's repository: on GitHub, **Settings › Developer settings › Fine-grained tokens › Generate new token**, *Only select repositories*: your site's, and under *Repository permissions*, **Contents: Read and write**.
+2. In AA Live's settings (in your browser, under the splits), tick **Upload each finished run to the stats site**, paste the token, and press Save. It's kept on your computer only, in AA Live's folder (see below); type `-` there and Save to forget it.
+3. Finish a run, do `/seed` (or type the seed when making the world), and leave the world. A few seconds later the run is added as the next run number, and the site rebuilds itself (a few minutes). Then add a video or notes from the site as usual.
+
+Only worlds played with AA Live running are uploaded, each one once, and not a run that's already on the site. If it can't upload (no internet, say), it tries again every 5 minutes while AA Live is open, and says why under the settings.
+
 ## On your phone
 
 With your phone on the same Wi-Fi, open the link AA Live shows under the splits in your browser ("On your phone"), like `http://192.168.1.20:7476/`. If the phone can't connect:

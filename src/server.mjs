@@ -253,12 +253,13 @@ function findWorld() {
 }
 
 // ---------- Following the play log ----------
-let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", plain = false, lastParse = 0;
+let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", raw = "", plain = false, lastParse = 0;   // (raw: the log as Hermes wrote it, for uploading)
 let anchor = null;      // {igt, wall}: the IGT at the latest line, and when that was
 let paused = true, open = false, changed = false;
+let watchedLive = false;   // (the log grew while AA Live was following it: the world was played with it running)
 
 function reset(w) {
-  world = w; file = null; offset = 0; rest = Buffer.alloc(0); text = ""; anchor = null; paused = true; open = false; changed = true;
+  world = w; file = null; offset = 0; rest = Buffer.alloc(0); text = raw = ""; anchor = null; watchedLive = false; paused = true; open = false; changed = true;
   log(w ? "World: " + w : "Waiting for Minecraft (Hermes)…");
 }
 
@@ -270,10 +271,11 @@ function readNew(sameWorld) {
   const f = fs.existsSync(enc) ? enc : fs.existsSync(dec) ? dec : null;
   if (!f) return;
   watchLog(path.dirname(f));
-  if (f !== file) { file = f; plain = f === dec; offset = 0; rest = Buffer.alloc(0); text = ""; }
+  if (f !== file) { file = f; plain = f === dec; offset = 0; rest = Buffer.alloc(0); text = raw = ""; }
   let size; try { size = fs.statSync(f).size; } catch { return; }
-  if (size < offset) { offset = 0; rest = Buffer.alloc(0); text = ""; }   // (started again)
+  if (size < offset) { offset = 0; rest = Buffer.alloc(0); text = raw = ""; }   // (started again)
   if (size === offset) return;
+  if (offset > 0) watchedLive = true;
   const fd = fs.openSync(f, "r"), chunk = Buffer.alloc(size - offset);
   try { fs.readSync(fd, chunk, 0, chunk.length, offset); } finally { fs.closeSync(fd); }
   offset = size;
@@ -284,8 +286,8 @@ function readNew(sameWorld) {
   if (!plain) { let s = 0; for (let i = 0; i < lines.length; i++) if (lines[i] === 10) { rotate(lines.subarray(s, i)); s = i + 1; } }
   // times are SpeedRunIGT's retimed IGT ("retime"; the IGT rounded to game ticks): put it where "igt" is, so the
   // timer and the stats site's log reader (which read "igt") both use it
-  const t = lines.toString("utf8").replace(/"igt":\d+,"retime":(\d+)/g, '"igt":$1,"retime":$1');
-  text += t;
+  const r = lines.toString("utf8"), t = r.replace(/"igt":\d+,"retime":(\d+)/g, '"igt":$1,"retime":$1');
+  raw += r; text += t;
   for (const line of t.split("\n")) watchLine(line);
   changed = true;
 }
@@ -434,8 +436,75 @@ function update() {
       catch (e) { log("Couldn't save the finished run: " + e.message); }
     } else savedRuns.set(key, finished.finalIgt);
   }
+  if (finished && !open) autoUpload(finished, world);
   const msg = "data: " + JSON.stringify(state) + "\n\n";
   for (const c of clients) c.write(msg);
+}
+
+// ---------- Uploading a finished run to the stats site ----------
+// With a GitHub token in the settings (one that can write to the site's repository), a finished run is added to the
+// site once its seed is known (/seed, or typed in when the world was made) and the world is left: its log, ghost file
+// and stats, and its date and seed in runs.json, as the next run, in one commit (as the site's editor does; the site
+// then builds itself). Each world only once, and not one already on the site.
+const uploaded = new Set(readJson(ownFile("uploaded.json")) || []);
+let uploading = false, uploadRetry = 0, uploadMsg = null;
+const uploadOn = () => !!(settings.token && settings.autoUpload && siteData && siteData.repo && siteData.repo.full);
+function autoUpload(run, w) {
+  // (only a world played with AA Live running, not an old one it was started next to)
+  if (REPLAY || uploading || !uploadOn() || !w || !watchedLive || !run.seed || Date.now() < uploadRetry) return;
+  const key = worldOf(run);
+  if (uploaded.has(key) || site.api.RUNS.some(r => !(r.meta && (r.meta.local || r.meta.wr)) && sameRun(r, run))) return;
+  uploading = true;
+  // (a few seconds first: Hermes writes the world's plain play.log on leaving it)
+  setTimeout(async () => {
+    try {
+      const num = await uploadRun(run, w, siteData.repo);
+      uploaded.add(key); try { fs.writeFileSync(ownFile("uploaded.json"), JSON.stringify([...uploaded])); } catch {}
+      uploadMsg = `Run ${num} uploaded to the stats site (${new Date().toLocaleTimeString()}): it's on the site in a few minutes`;
+      log(uploadMsg);
+    } catch (e) {
+      uploadRetry = Date.now() + 5 * 60000;   // (again in 5 minutes, if still not done)
+      uploadMsg = "Couldn't upload the run to the stats site: " + e.message + " (trying again in 5 minutes)";
+      log(uploadMsg); setTimeout(update, 5 * 60000 + 1000);
+    } finally { uploading = false; update(); }
+  }, 5000);
+}
+async function github(repo, p, opts = {}) {
+  const res = await fetch((process.env.AA_LIVE_GITHUB_API || "https://api.github.com") + "/repos/" + repo + p, {method: opts.method || "GET",   // (the variable: for testing)
+    headers: {Accept: "application/vnd.github+json", Authorization: "Bearer " + settings.token, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "AA-Live", ...(opts.body ? {"Content-Type": "application/json"} : {})},
+    body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (!res.ok) { let m = ""; try { m = (await res.json()).message || ""; } catch {} throw new Error(res.status === 401 ? "the GitHub token isn't valid (any more?)" : res.status === 403 || res.status === 404 ? `the GitHub token can't write to ${repo}` : `GitHub: ${res.status} ${m}`); }
+  return res.status === 204 ? null : res.json();
+}
+async function uploadRun(run, w, {full, branch = "main"}) {
+  // the log: the world's plain play.log if it has all of the run, else what was read while playing
+  let logText = raw;
+  try { const f = path.join(w, "hermes", "play.log"), t = fs.readFileSync(f, "utf8"); if (site.api.parseLog(t, "play.log").finalIgt >= run.finalIgt - 1000) logText = t; } catch {}
+  // the player's ghost and stats files (named by their uuid)
+  const pick = (dir, ext) => { try { const xs = fs.readdirSync(dir).filter(x => x.endsWith(ext)); const x = (run.uuid && xs.find(y => y.toLowerCase().startsWith(run.uuid.toLowerCase()))) || (xs.length === 1 ? xs[0] : null); return x ? path.join(dir, x) : null; } catch { return null; } };
+  const ghostF = pick(path.join(w, "hermes", "ghosts"), ".ghost"), statsF = pick(path.join(w, "stats"), ".json");
+  // the next run number: after every one in the repository (logs/, runs/, runs.json)
+  const head = (await github(full, `/git/ref/heads/${branch}`)).object.sha;
+  const base = (await github(full, `/git/commits/${head}`)).tree.sha;
+  const paths = (await github(full, `/git/trees/${base}?recursive=1`)).tree.map(x => x.path);
+  let details = {};
+  if (paths.includes("runs.json")) { const f = await github(full, `/contents/runs.json?ref=${encodeURIComponent(branch)}`); details = JSON.parse(Buffer.from(f.content, "base64").toString("utf8")) || {}; }
+  const nums = [...paths.map(p => (/^(?:logs|runs)\/(\d+)\./.exec(p) || [])[1]), ...Object.keys(details)].map(Number).filter(n => n > 0);
+  const num = Math.max(0, ...nums) + 1;
+  const d = new Date(run.start), date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  details[String(num)] = {date, seed: String(run.seed)};
+  const files = [{path: `logs/${num}.log`, b64: Buffer.from(logText, "utf8").toString("base64")}, {path: "runs.json", text: JSON.stringify(details, null, 2) + "\n"}];
+  if (ghostF) files.push({path: `logs/${num}.ghost`, b64: fs.readFileSync(ghostF).toString("base64")});
+  if (statsF) files.push({path: `logs/${num}.stats.json`, text: fs.readFileSync(statsF, "utf8")});
+  const tree = [];
+  for (const f of files) {
+    if (f.b64 != null) tree.push({path: f.path, mode: "100644", type: "blob", sha: (await github(full, "/git/blobs", {method: "POST", body: {content: f.b64, encoding: "base64"}})).sha});
+    else tree.push({path: f.path, mode: "100644", type: "blob", content: f.text});
+  }
+  const t = await github(full, "/git/trees", {method: "POST", body: {base_tree: base, tree}});
+  const c = await github(full, "/git/commits", {method: "POST", body: {message: `Add run ${num} (from AA Live)`, tree: t.sha, parents: [head]}});
+  await github(full, `/git/refs/heads/${branch}`, {method: "PATCH", body: {sha: c.sha}});
+  return num;
 }
 
 let finished = null;   // the run being followed, once it's finished
@@ -445,7 +514,8 @@ function compute() {
   const {api} = site, n = api.SPLITS.length;
   const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
     rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, updateReady, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
-    world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now()};
+    world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now(),
+    upload: {token: !!settings.token, on: !!settings.autoUpload, repo: siteData && siteData.repo ? siteData.repo.full : null, msg: uploadMsg}};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
   if (!text) return empty;
@@ -519,10 +589,14 @@ const server = http.createServer((req, res) => {
       const j = (() => { try { return JSON.parse(body); } catch { return null; } })();
       const s = j && typeof j.site === "string" ? j.site.trim() : null;
       if (s == null || (s && !/^https?:\/\/\S+$/i.test(s))) { res.writeHead(400); return res.end("The stats site has to be a link (https://…), or empty"); }
+      // (uploading: on or off, and a GitHub token, only when one's typed in: "-" forgets it)
+      if (typeof j.autoUpload === "boolean") settings.autoUpload = j.autoUpload;
+      if (typeof j.token === "string" && j.token.trim()) { const k = j.token.trim(); if (k === "-") delete settings.token; else if (/^[\w-]{20,255}$/.test(k)) settings.token = k; else { res.writeHead(400); return res.end("That doesn't look like a GitHub token"); } }
+      const siteChanged = s !== SITE;
       settings.site = s; SITE = s;
       try { fs.writeFileSync(ownFile("settings.json"), JSON.stringify(settings, null, 2)); } catch {}
-      log(s ? "Stats site set to " + s : "No stats site: comparing with the runs finished with AA Live");
-      site = null; fetchSite();
+      if (siteChanged) { log(s ? "Stats site set to " + s : "No stats site: comparing with the runs finished with AA Live"); site = null; fetchSite(); }
+      else update();
       res.writeHead(204); res.end();
     });
   } else if (url.pathname === "/state.json") {

@@ -62,6 +62,8 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 ::-webkit-scrollbar{display:none;width:0;height:0}
 .note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
 .setrow{display:flex;gap:6px;margin-top:8px}
+.setchk{display:flex;gap:8px;align-items:flex-start;margin-top:8px}.setchk input{margin-top:5px}
+#upInfo{opacity:.8}
 .setrow input{flex:1;min-width:0;background:var(--row);border:0;color:var(--text);font:inherit;font-size:18px;padding:4px 8px}
 .setrow button{border:0;background:var(--row);color:var(--text);font:inherit;font-size:20px;padding:4px 10px;cursor:pointer}
 .setrow button:hover{background:var(--on)}
@@ -98,6 +100,9 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
     <form class="note hide" id="settings">
       <label for="siteIn">Stats site (optional): your <a href="https://github.com/zesskyo/aa-stats" target="_blank" rel="noopener" style="color:inherit">aa-stats</a> site's link, to compare with its runs. Without one, it compares with the runs you finish with AA Live.</label>
       <div class="setrow"><input id="siteIn" type="url" placeholder="https://you.github.io/your-site/" autocomplete="off" spellcheck="false"><button type="submit">Save</button></div>
+      <label class="setchk"><input type="checkbox" id="upOn"> Upload each finished run to the stats site: once its seed is known (do /seed) and you leave the world</label>
+      <div class="setrow" id="upTokRow"><input id="upTok" type="password" placeholder="GitHub token (only once)" autocomplete="off" spellcheck="false"></div>
+      <div id="upInfo"></div>
       <div id="setMsg"></div>
     </form>
   </div>
@@ -441,6 +446,13 @@ function render() {
   // (the settings: in this computer's browser only, not in OBS or on a phone)
   $("settings").classList.toggle("hide", !here);
   if (here && document.activeElement !== $("siteIn") && $("siteIn").dataset.was !== (S.siteUrl || "")) { $("siteIn").value = $("siteIn").dataset.was = S.siteUrl || ""; }
+  // (uploading: on or off, and whether a token's saved; never the token itself)
+  if (here && S.upload) {
+    const u = S.upload;
+    if (document.activeElement !== $("upOn")) $("upOn").checked = u.on;
+    $("upTok").placeholder = u.token ? "GitHub token: saved (type - to forget it)" : "GitHub token, that can write to " + (u.repo || "the site's repository");
+    put($("upInfo"), u.msg ? esc(u.msg) : u.on && u.token && !u.repo ? "The stats site doesn't say which repository it's in yet (it does once it's rebuilt on GitHub)" : u.on && u.token ? "Uploads to " + esc(u.repo) : "");
+  }
   const ph = $("phone"), showPhone = here && S.phone;
   ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, `On your phone (same Wi-Fi): <a href="${esc(S.phone)}" style="color:inherit">${esc(S.phone)}</a>`);
   // (playing back a run)
@@ -460,7 +472,8 @@ function render() {
 // every frame (for the milliseconds)
 $("settings").addEventListener("submit", async e => {
   e.preventDefault();
-  const r = await fetch("/settings", {method: "POST", body: JSON.stringify({site: $("siteIn").value})}).catch(() => null);
+  const r = await fetch("/settings", {method: "POST", body: JSON.stringify({site: $("siteIn").value, autoUpload: $("upOn").checked, token: $("upTok").value})}).catch(() => null);
+  if (r && r.ok) $("upTok").value = "";
   $("setMsg").textContent = !r ? "Couldn't reach AA Live" : r.ok ? "Saved" : await r.text();
 });
 const frame = () => { render(); requestAnimationFrame(frame); };
