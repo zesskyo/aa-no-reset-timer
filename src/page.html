@@ -227,9 +227,8 @@ function render() {
   vs.classList.toggle("pace", comp === "auto" && !!C && (C === pb || C === wr));
   const c = i => C && C.splits[i] != null ? C.splits[i] : null, b = i => best && best.splits[i] != null ? best.splits[i] : null;
   const ce = i => C && C.ends && C.ends[i] != null ? C.ends[i] : null;
-  // a running split's delta shows once it's behind, or just before it goes behind (the minus, about to go red): within a
-  // tenth of the comparison's time for it, and at least 30 seconds
-  const soon = (d, len) => d > 0 || d > -Math.max(30000, (len || 0) / 10);
+  // a running split's delta shows once it's behind, or in the minute before it goes behind (the minus, about to go red)
+  const soon = d => d > -60000;
 
   // each finished split: how far ahead or behind at its end (its split time against the comparison's)
   let prevD = 0;
