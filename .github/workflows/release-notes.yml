@@ -8,7 +8,7 @@ on:
         description: "The release's version tag (v1.1.1)"
         required: true
       notes:
-        description: "What's new (Markdown)"
+        description: "What changed: a Markdown list"
         required: false
         default: ""
 
@@ -25,8 +25,12 @@ jobs:
           target_commitish: ${{ github.sha }}   # (only used for a new tag: an existing one stays where it is)
           make_latest: false   # (an older release stays older)
           body: |
-            **Download** the file for your computer below: `…-win.exe` (Windows), `…-mac.dmg` (Mac) or `…-linux.AppImage` (Linux). How to install it: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it).
-
-            **Already have AA Live?** No need to download this: it updates itself, the next time it's opened.
+            **Changes**
 
             ${{ inputs.notes }}
+
+            **Download**
+
+            - Windows: `…-win.exe` · Mac: `…-mac.dmg` · Linux: `…-linux.AppImage`
+            - Already installed: it updates itself
+            - Setup: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it)

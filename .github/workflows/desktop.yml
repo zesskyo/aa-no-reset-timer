@@ -13,7 +13,7 @@ on:
         required: false
         default: ""
       notes:
-        description: "The release's notes: what's new (Markdown)"
+        description: "What changed: a Markdown list"
         required: false
         default: ""
 
@@ -61,11 +61,15 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: AA Live ${{ inputs.release || github.ref_name }}
           body: |
-            **Download** the file for your computer below: `…-win.exe` (Windows), `…-mac.dmg` (Mac) or `…-linux.AppImage` (Linux). How to install it: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it).
-
-            **Already have AA Live?** No need to download this: it updates itself, the next time it's opened.
+            **Changes**
 
             ${{ inputs.notes }}
+
+            **Download**
+
+            - Windows: `…-win.exe` · Mac: `…-mac.dmg` · Linux: `…-linux.AppImage`
+            - Already installed: it updates itself
+            - Setup: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it)
           # (latest*.yml and the .blockmap: what the app's updater reads)
           files: |
             desktop/dist/*.exe
