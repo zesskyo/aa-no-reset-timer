@@ -45,7 +45,7 @@ The browser source follows how the splits look in AA Live's settings. Options af
 | `?bg=60` | the background 60% black (0 to 100; `100` for solid black) |
 | `?ms=1` | the decimals the timer shows: `1` tenths, `2` hundredths, `0` none (3 without it) |
 | `?rows=10` | how many splits are listed at once (8 without it; each one is 36 pixels more or less) |
-| `?clock=short` | the timers grow like LiveSplit's: `24.301`, then `1:24.301`, then `1:00:24.301` (without it, always `0:00:24.301`) |
+| `?clock=s` | the timer's digits, as in LiveSplit: `s` (`1`, then `1:23`, then `1:23:45` as it grows), `m` (always `1:23`) or `h` (always `1:23:45`, the default) |
 | `?scale=1.5` | 1.5 times bigger (multiply the width and height too) |
 | `?comp=avg` | what it compares with: `auto` (the default: the average, the PB while the run's on PB pace, and the WR while it's on WR pace), `pb`, `avg`, `best`, `worst` or `wr`. It's shown at the top ("Auto: PB", "Auto: WR", "vs Avg"…) |
 

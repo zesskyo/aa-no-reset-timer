@@ -89,7 +89,7 @@ function openWindow() {
 
 function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
-  settingsWin = new BrowserWindow({width: 560, height: 760, minWidth: 420, title: "AA Live settings", backgroundColor: "#0b0c0f", autoHideMenuBar: true, show: false,
+  settingsWin = new BrowserWindow({width: 620, height: 820, minWidth: 460, title: "AA Live settings", backgroundColor: "#0b0c0f", autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, "icon.png"), webPreferences: {contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload.cjs")}});
   settingsWin.removeMenu();
   safeWeb(settingsWin);

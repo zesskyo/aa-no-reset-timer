@@ -118,8 +118,8 @@ const settings = readJson(ownFile("settings.json")) || {};
 let SITE = opt("site") ?? settings.site ?? "";
 // how the splits look (the settings page; a link's ?comp=, ?ms=… still win): what they compare with, the decimals, how
 // many rows, the size, the background
-const DISPLAY_DEFAULTS = {comp: "auto", ms: 3, rows: 8, scale: 1, bg: null, clock: "full"};
-const display = () => ({...DISPLAY_DEFAULTS, ...(settings.display || {})});
+const DISPLAY_DEFAULTS = {comp: "auto", ms: 3, rows: 8, scale: 1, bg: null, clock: "h"};
+const display = () => { const d = {...DISPLAY_DEFAULTS, ...(settings.display || {})}; d.clock = {full: "h", short: "s"}[d.clock] || d.clock; return d; };
 // (the last few hundred lines it's printed, for a bug report: /report.txt)
 const logLines = [];
 const log = (...m) => { const l = [new Date().toLocaleTimeString(), ...m].join(" "); logLines.push(l); if (logLines.length > 400) logLines.shift(); console.log(l); };
@@ -601,10 +601,11 @@ const server = http.createServer((req, res) => {
       if (j && j.display && typeof j.display === "object") {
         const d = {...display()}, x = j.display, num = (v, a, b) => Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : null;
         if (["auto", "pb", "avg", "best", "worst", "wr"].includes(x.comp)) d.comp = x.comp;
-        if (["full", "short"].includes(x.clock)) d.clock = x.clock;
+        // (the timer's digits, as in LiveSplit: 1 › 1:23 › 1:23:45 as it grows, always 0:01, or always 0:00:01)
+        if (["s", "m", "h"].includes(x.clock)) d.clock = x.clock;
         if (num(x.ms, 0, 3) != null) d.ms = Math.round(num(x.ms, 0, 3));
         if (num(x.rows, 2, 30) != null) d.rows = Math.round(num(x.rows, 2, 30));
-        if (num(x.scale, 0.5, 4) != null) d.scale = num(x.scale, 0.5, 4);
+        if (num(x.scale, 0.5, 4) != null) d.scale = Math.round(num(x.scale, 0.5, 4) * 100) / 100;
         if ("bg" in x) d.bg = x.bg === null || x.bg === "" ? null : num(x.bg, 0, 100);
         settings.display = d;
         if (j.site === undefined) { try { fs.writeFileSync(ownFile("settings.json"), JSON.stringify(settings, null, 2)); } catch {} update(); res.writeHead(204); return res.end(); }

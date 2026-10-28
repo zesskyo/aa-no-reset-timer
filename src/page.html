@@ -99,7 +99,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 // how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
-const D = /*DISPLAY*/{}, LINK_BG = P.has("bg");
+const D = /*DISPLAY*/{}, LINK_BG = P.has("bg"), LINK_SCALE = P.has("scale");
 // (size 1: as if not set, so a phone still fits it to its width)
 for (const k of ["comp", "ms", "rows", "scale", "bg", "clock"]) if (!P.has(k) && D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k]));
 // ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
@@ -121,7 +121,7 @@ setBg(bgParam);
 if (window.obsstudio) document.documentElement.style.overflow = "hidden";
 // ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1, or the OBS source's width)
 // (without it, in a browser narrower than that, a phone say, it's made to fit)
-const scale = parseFloat(P.get("scale"));
+let scale = parseFloat(P.get("scale"));
 // (a phone counts the page's own width as the window's, so its screen's width is used too)
 // (in OBS it fills the browser source's width, if that's wider: longer names fit)
 const fit = () => {
@@ -141,9 +141,13 @@ const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(M
 // the same with milliseconds, smaller
 // (?ms= is how many decimals: 0 to 3, 3 without it)
 const decimals = /^[0-3]$/.test(P.get("ms") || "") ? Number(P.get("ms")) : 3;
-// (?clock=short: the timers grow like LiveSplit's, 24.301, 1:24.301, then 1:00:24.301)
-const SHORT = P.get("clock") === "short";
-const grow = (ms, long) => SHORT && ms < 60000 ? String(Math.floor(Math.max(0, ms) / 1000)) : fmt(ms, long && !(SHORT && ms < 3600000));
+// the timer's digits, as in LiveSplit: ?clock=s (1, 1:23, then 1:23:45 as it grows), m (always 0:01) or h (always
+// 0:00:01, without it). The split's own timer: the same, but never with the hours before it needs them.
+const CLOCK = {s: "s", short: "s", m: "m"}[P.get("clock")] || "h", SEG_CLOCK = CLOCK === "h" ? "m" : CLOCK;
+const digits = (ms, least) => {
+  const s = Math.floor(Math.max(0, ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60, p = n => String(n).padStart(2, "0");
+  return h || least === "h" ? `${h}:${p(m)}:${p(x)}` : m || least === "m" ? `${m}:${p(x)}` : String(x);
+};
 // The timers next to the comparison's lines: smaller if they don't fit beside them (down to 60%; any smaller, and they
 // go under them instead, full size)
 const fitClock = () => {
@@ -152,7 +156,7 @@ const fitClock = () => {
   const room = box.clientWidth - 24 - 10 - dl.offsetWidth, need = dr.offsetWidth;
   if (need > room && room / need >= 0.6) dr.style.zoom = String(Math.floor(room / need * 100) / 100);
 };
-const fmtMs = (ms, long) => grow(ms, long) + (decimals ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0").slice(0, decimals)}</span>` : "");
+const fmtMs = (ms, least) => digits(ms, least) + (decimals ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0").slice(0, decimals)}</span>` : "");
 // a difference: −9.4 under a minute, otherwise −1:23 (or +1:02:03)
 const delta = ms => (ms < 0 ? "−" : "+") + (Math.abs(ms) < 60000 ? (Math.floor(Math.abs(ms) / 100) / 10).toFixed(1) : fmt(Math.abs(ms)));
 // LiveSplit's colours: ahead or behind, and gaining or losing time in that split (gold: the best that split has been)
@@ -175,9 +179,12 @@ const es = new EventSource("/events");
 es.onmessage = e => { S = JSON.parse(e.data); connected = true;
   // (the look changed in the settings: again, with it)
   if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) {
-    // (only the background: in place, unless the link sets its own)
-    if (JSON.stringify({...S.display, bg: 0}) === JSON.stringify({...D, bg: 0})) { D.bg = S.display.bg; if (!LINK_BG) setBg(D.bg ?? NaN); }
-    else { location.reload(); return; }
+    // (only the background or the size: in place, unless the link sets its own; anything else, the page again)
+    if (JSON.stringify({...S.display, bg: 0, scale: 0}) === JSON.stringify({...D, bg: 0, scale: 0})) {
+      D.bg = S.display.bg; D.scale = S.display.scale;
+      if (!LINK_BG) setBg(D.bg ?? NaN);
+      if (!LINK_SCALE) { scale = D.scale === 1 ? NaN : D.scale; fit(); }
+    } else { location.reload(); return; }
   }
   render(); };
 // (paused or unpaused just now: ahead of the next full update)
@@ -420,7 +427,7 @@ function render() {
   const pace = C ? now + left(c, cd) : null, possible = best ? now + left(b, bd) : null;
   const on = rows[ri];
   const t = $("timer");
-  put(t, fmtMs(now, true));
+  put(t, fmtMs(now, CLOCK));
   fitClock();
   // (its colour: the split it's on, once that shows a time, else the last finished)
   const liveD = on && ce(on.i) != null && soon(now - ce(on.i), c(on.i)) ? now - ce(on.i) : prevD;
@@ -430,7 +437,7 @@ function render() {
   // (a Midgame checklist split: the comparison's own time for it, though its delta in the list is against Average)
   const segC = onSub ? (onSub.mid ? (C && C.mid ? (C.mid[onSub.mid] ?? null) : mc(onSub.mid)) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
   const segB = onSub ? (onSub.mid ? mb(onSub.mid) : bd(onSub.i, onSub.j)) : on ? b(on.i) : null;
-  put($("segTimer"), segCur != null ? fmtMs(segCur) : "");
+  put($("segTimer"), segCur != null ? fmtMs(segCur, SEG_CLOCK) : "");
   const segName = onSub && onSub.mid && !(C && C.mid) ? (AVG ? AVG.short : "") : C ? C.short : "";
   put($("segComp"), C && on && key !== "best" ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
