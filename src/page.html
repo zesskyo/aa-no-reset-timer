@@ -260,9 +260,10 @@ function render() {
   const bd = (i, j) => best && best.subDurs && best.subDurs[i] && best.subDurs[i][j] != null ? best.subDurs[i][j] : null;
   let onSub = null;   // the step it's on: {cur, i, j}, or {cur, mid: key} for a Midgame checklist split
   // the Midgame checklist's splits: the comparison's length, and the fastest
-  // (the checklist's splits are always compared with the average: a PB often hasn't got one of them)
+  // (compared with what the rest is, or with the average where that run hasn't got one, as a PB often hasn't): [time, its name]
   const AVG = S.comps.avg || C;
-  const mc = k => AVG && AVG.mid && AVG.mid[k] != null ? AVG.mid[k] : null, mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
+  const midCmp = k => C && C.mid && C.mid[k] != null ? [C.mid[k], C.short] : AVG && AVG.mid && AVG.mid[k] != null ? [AVG.mid[k], AVG.short] : [null, ""];
+  const mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
   // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site; places they left a
   // few seconds ago still count): its splits (shown for a minute after they finish), and its counters. The split it's on
   // (in its area, or being worked on now) is the blue one, with what's left of it under it. Under Post-endgame, what of
@@ -321,7 +322,7 @@ function render() {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); };
         if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: x.need == null ? String(x.have) : `${x.have}/${x.need}`, dc: "prog", tm: ""}); info(); continue; }
-        const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), cmp = mc(x.key);
+        const live = x.end == null && x.since != null, cur = (x.dur || 0) + (live ? extra : 0), [cmp] = midCmp(x.key);
         let d, dc;
         if (x.complete && cmp != null) { d = delta(cur - cmp); dc = colour(cur - cmp, true, mb(x.key) != null && cur < mb(x.key)); }
         else if (x.end == null && cmp != null && soon(cur - cmp, cmp)) { d = delta(cur - cmp); dc = colour(cur - cmp, false); }
@@ -334,7 +335,9 @@ function render() {
         // goes through what's left, as there's nothing under it to)
         const same = x.parts && x.parts.length === 1 && x.parts[0][1] === x.have && x.parts[0][2] === x.need;
         const needIcons = x.end == null && (on ? same : x.time === "active" || x.pin) ? (x.parts || []).flatMap(p => p[3] || []).map(iconOf) : [];
-        out.push({cls: "sub" + (on ? " on" : ""), icon: needIcons.length ? cycle(x.key + "|row", needIcons) : iconOf(x.item), name: x.name, d, dc, tm: x.start != null ? fmt(cur) : "—"});
+        // (its time: how long it took, once it's done; until then, how long the comparison's took, as the splits above
+        // show the comparison's until they're done. The time on it so far is the timer under the list.)
+        out.push({cls: "sub" + (on ? " on" : ""), icon: needIcons.length ? cycle(x.key + "|row", needIcons) : iconOf(x.item), name: x.name, d, dc, tm: x.complete ? fmt(cur) : cmp != null ? fmt(cmp) : "—"});
         // (what's left of it: "Biomes 3/5", "Foods 1/2", the rest by name)
         // (each with the icon of something missing in it, taking turns)
         info();
@@ -460,10 +463,10 @@ function render() {
   // the split it's on (or the step of it, when it has sub-splits): its time so far, and the comparison's and the best
   const segCur = onSub ? onSub.cur : on ? on.cur : null;
   // (a Midgame checklist split: the comparison's own time for it, though its delta in the list is against Average)
-  const segC = onSub ? (onSub.mid ? (C && C.mid ? (C.mid[onSub.mid] ?? null) : mc(onSub.mid)) : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
+  const segC = onSub ? (onSub.mid ? midCmp(onSub.mid)[0] : cd(onSub.i, onSub.j)) : on ? c(on.i) : null;
   const segB = onSub ? (onSub.mid ? mb(onSub.mid) : bd(onSub.i, onSub.j)) : on ? b(on.i) : null;
   put($("segTimer"), segCur != null ? fmtMs(segCur, SEG_CLOCK) : "");
-  const segName = onSub && onSub.mid && !(C && C.mid) ? (AVG ? AVG.short : "") : C ? C.short : "";
+  const segName = onSub && onSub.mid ? midCmp(onSub.mid)[1] || (C ? C.short : "") : C ? C.short : "";
   put($("segComp"), C && on && key !== "best" ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
@@ -471,8 +474,9 @@ function render() {
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
   // (all four always there, "—" until there's something, so the page is always the same height: for cropping in OBS)
   let info = "";
+  // (the last finished split: the time gained or lost in it against the comparison, as LiveSplit shows it; gold: its best)
   const prevSeg = prev && c(prev.i) != null ? (() => { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
-    return `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : ""); })() : "—";
+    return `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>`; })() : "—";
   info += kv("Previous Segment", prevSeg);
   // (a finished run: its final time)
   info += kv("Current Pace", S.done ? fmt(now, true) : pace != null ? fmt(pace, true) : "—");
