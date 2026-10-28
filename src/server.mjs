@@ -162,6 +162,13 @@ function loadSite(data, fetchedAt) {
     wr: wr ? {name: "World Record" + (wr.meta && wr.meta.runner ? " · " + wr.meta.runner : ""), short: "WR", splits: durs(wr), final: wr.finalIgt} : null,
   };
   if (comps.best) { comps.best.final = comps.best.splits.reduce((a, b) => a + (b || 0), 0); comps.best.name = "Sum of Best"; }
+  // for the pace: each split's (and step's) time in every run (a split a run didn't have: no time; see the page)
+  const ds = valid.map(r => api.derive(r));
+  if (ds.length) comps.pace = {
+    splits: api.SPLITS.map((_, i) => ds.map(d => d.splits[i].dur ?? 0)),
+    subs: api.SPLITS.map((_, i) => { const n = Math.max(0, ...ds.map(d => d.splits[i].subs ? d.splits[i].subs.length : 0));
+      return n ? [...Array(n)].map((_, j) => ds.map(d => d.splits[i].subs && d.splits[i].subs[j] ? d.splits[i].subs[j].dur : null).filter(x => x != null)) : null; }),
+  };
   // each comparison's split times (the time each split ended at): a real run's own (a split it didn't have ends where the
   // one before did); for average, best and worst, the segments added up, as LiveSplit does
   const endsOf = r => { let t = 0; return api.derive(r).splits.map(s => t = s.end ?? t); };
