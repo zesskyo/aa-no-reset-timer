@@ -2,12 +2,13 @@
 // Usage: node build.mjs <aa-stats folder>   (the code of the stats site: https://github.com/zesskyo/aa-stats)
 import fs from "node:fs";
 import path from "node:path";
-const here = path.dirname(new URL(import.meta.url).pathname), A = path.resolve(process.argv[2] || "../aa-stats");
+import { fileURLToPath, pathToFileURL } from "node:url";   // (Windows paths)
+const here = path.dirname(fileURLToPath(import.meta.url)), A = path.resolve(process.argv[2] || "../aa-stats");
 const rd = f => fs.readFileSync(f, "utf8");
 // the stats site's code the splitter uses (so it reads logs and works out splits exactly like the site)
 const SITE = ["text.js", "config.js", "helpers.js", "parse-log.js", "runs.js", "splits.js", "stats.js"].map(f => `/* ======== ${f} ======== */\n` + rd(path.join(A, "src", f))).join("\n");
 // the item icons of the sub-splits and the Midgame checklist (config.js' SUB_ITEMS and MIDGAME), cut out of the stats site's item atlas
-const { readPng, writePng, pickSquares } = await import(path.join(A, "png.mjs"));
+const { readPng, writePng, pickSquares } = await import(pathToFileURL(path.join(A, "png.mjs")).href);
 const { SUB_ITEMS, MIDGAME } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SUB_ITEMS, MIDGAME };")();
 const items = JSON.parse(rd(path.join(A, "items/items.json"))), atlas = readPng(fs.readFileSync(path.join(A, "items/atlas.png")));
 // (keys as the page uses them: "item:<item>", "item:icon:<name>" for the stats site's own icons, and the checklist's goals'

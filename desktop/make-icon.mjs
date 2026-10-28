@@ -2,8 +2,9 @@
 // Usage: node desktop/make-icon.mjs <aa-stats folder>
 import fs from "node:fs";
 import path from "node:path";
-const A = path.resolve(process.argv[2] || "../aa-stats"), here = path.dirname(new URL(import.meta.url).pathname);
-const { readPng, writePng, pickSquares } = await import(path.join(A, "png.mjs"));
+import { fileURLToPath, pathToFileURL } from "node:url";   // (Windows paths)
+const A = path.resolve(process.argv[2] || "../aa-stats"), here = path.dirname(fileURLToPath(import.meta.url));
+const { readPng, writePng, pickSquares } = await import(pathToFileURL(path.join(A, "png.mjs")).href);
 const items = JSON.parse(fs.readFileSync(path.join(A, "items/items.json"), "utf8"));
 const one = pickSquares(readPng(fs.readFileSync(path.join(A, "items/atlas.png"))), items.size, 1, [items.index.clock]);
 const S = 512, k = Math.floor(S / one.w), off = Math.floor((S - one.w * k) / 2), px = Buffer.alloc(S * S * 4);
