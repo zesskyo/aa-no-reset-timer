@@ -12,21 +12,27 @@ A live splitter for **AA No Reset** runs of Minecraft 1.16.1: all advancements i
 
 > **Note:** AA Live reads Hermes' ciphered live log while you play. Hermes says using that during a run isn't allowed for runs submitted to speedrun.com, so **don't use AA Live for runs you'll submit**.
 
-## What you need
+## Getting it
 
-- Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/Hermes) mod (**0.14 or newer**: older versions don't log the biome you're in, so the biome splits can't be timed and the Midgame checklist can't follow where you are), and SpeedRunIGT.
-- That's it: AA Live runs on [Node.js](https://nodejs.org), and if it isn't installed, AA Live downloads its own copy the first time it starts (about 30–45 MB, into its `app/node` folder, checked against nodejs.org's checksums; nothing is installed on the computer). If Node.js is installed, it uses that.
-- AA Live itself: **Code › Download ZIP** on this page, then unzip it somewhere.
+Download the app from the [latest release](https://github.com/zesskyo/aa-no-reset-timer/releases/latest):
+
+- **Windows:** `AA-Live-…-win.exe`. Run it to install (it makes a Start menu and desktop shortcut). AA Live isn't signed, so the first time Windows may say it protected your PC: click **More info › Run anyway**. If Windows Firewall asks about AA Live, allow it on **private networks** (only needed for the phone link).
+- **Mac:** `AA-Live-…-mac.dmg`. Open it and drag AA Live into Applications. It isn't signed, so the first time right-click it, choose **Open**, then **Open** again (if macOS says it's damaged: in Terminal, `xattr -cr "/Applications/AA Live.app"`).
+- **Linux:** `AA-Live-…-linux.AppImage`. Make it executable and run it.
+
+You also need Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/Hermes) mod (**0.14 or newer**: older versions don't log the biome you're in, so the biome splits can't be timed and the Midgame checklist can't follow where you are; **0.16** logs the seed when you do `/seed`), and SpeedRunIGT.
 
 ## Starting it
 
-**Windows:** double-click **app\Start AA Live.bat**. The first time:
-- if Windows says it protected your PC, click **More info › Run anyway**;
-- if Windows Firewall asks about Node.js, allow it on **private networks** (only needed for the phone link).
+Open **AA Live**. Its window shows the splits, and the settings under them. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world. Closing the window stops it (and OBS's browser source goes blank until it's open again).
 
-**Mac:** double-click **app/Start AA Live.command**. The first time, macOS may refuse to open it: right-click it, choose **Open**, then **Open** again.
+The splits are also at <http://localhost:7476/> while it's open: that's the link for OBS (below), and a browser.
 
-The first time, if Node.js isn't installed, it downloads it first (a minute or so). Then the splits open in your browser at <http://localhost:7476/>. Leave the window that opened running while you play; close it to stop AA Live. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world.
+<details><summary>Without the app (with Node.js)</summary>
+
+**Code › Download ZIP** on this page, unzip it, and double-click **app\Start AA Live.bat** (Windows) or **app/Start AA Live.command** (Mac; the first time, right-click it › **Open** › **Open**). If Node.js isn't installed, it downloads its own copy the first time (about 30–45 MB, into `app/node`, checked against nodejs.org's checksums). The splits open in your browser; leave the window that opened running while you play.
+
+</details>
 
 ## In OBS
 
@@ -72,11 +78,9 @@ Double-click **app\Replay a run.bat** (Windows) or **app/Replay a run.command** 
 
 ## Updating
 
-**To update, close AA Live's window and start it again** (double-click **Start AA Live.bat**, or **Start AA Live.command** on a Mac). Each time it starts, AA Live looks for a newer version here on GitHub, and if there is one, puts it in place and starts the new one: a few seconds (with no internet, it just starts). Then, in OBS, right-click the browser source › **Refresh**.
+**The app** says when a new version is out (when it starts), with a link to download it: install it over the old one. Then, in OBS, right-click the browser source › **Refresh**.
 
-It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits (in your browser), and updates the next time you start it.
-
-To update by hand at any time, do the same. To stop it updating itself, add `--no-update` at the end of the line in the start file.
+**Without the app:** close AA Live's window and start it again. Each time it starts, it looks for a newer version here on GitHub and puts it in place (a few seconds; with no internet, it just starts). It never updates in the middle of a run: if a new version comes out while it's running, it says so under the splits, and updates the next time. To stop it updating itself, add `--no-update` at the end of the line in the start file.
 
 ## Where it keeps things
 
@@ -105,6 +109,9 @@ After `node app/aa-live.mjs` (or add them to the end of the line in the start fi
 - **Finished:** 80/80, or 79/80 with only Very Very Frightening missing once a channeling trident (or a Channeling book and a trident) has been in the inventory (Thunderless).
 
 ## Changing it
+
+The app is `desktop/` (Electron): `cd desktop && npm install && npm start` runs it from `app/aa-live.mjs` (build that first). Pushing a version tag (`v1.2.0`, with the same version in `desktop/package.json`) builds the installers on GitHub (`.github/workflows/desktop.yml`) and puts them in a release; running that workflow by hand builds them without a release.
+
 
 - `src/server.mjs` finds the world, follows the log, works out the splits and serves the page; `src/page.html` is the page; `src/rotator.mjs` deciphers the live log.
 - `node build.mjs <aa-stats folder>` puts it all into `app/aa-live.mjs`, with aa-stats' code, icons and the Minecraft font. It needs a copy of [aa-stats](https://github.com/zesskyo/aa-stats).
