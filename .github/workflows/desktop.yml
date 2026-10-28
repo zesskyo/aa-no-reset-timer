@@ -1,12 +1,17 @@
 # Builds the AA Live app (desktop/): an installer for Windows, a .dmg for Mac and an AppImage for Linux, from the
-# timer's code and the stats site's (zesskyo/aa-stats). Run by hand, it keeps them as the run's artifacts; on a version
-# tag (v1.2.0), it makes a release with them.
+# timer's code and the stats site's (zesskyo/aa-stats). Run by hand, it keeps them as the run's artifacts (or, given a
+# version, makes that tag and a release with them); on a pushed version tag (v1.2.0), it makes a release with them.
 name: Build the AA Live app
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Make a release with them: its version tag (v1.0.0), or empty for just the artifacts"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -45,9 +50,12 @@ jobs:
             desktop/dist/*.AppImage
           if-no-files-found: error
       - name: Add to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: AA Live ${{ inputs.release || github.ref_name }}
           files: |
             desktop/dist/*.exe
             desktop/dist/*.dmg

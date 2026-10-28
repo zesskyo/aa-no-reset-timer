@@ -60,6 +60,9 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
    still scrolls, to the settings */
 *{scrollbar-width:none}
 ::-webkit-scrollbar{display:none;width:0;height:0}
+.more-btn{display:block;width:100%;background:none;border:0;border-top:2px solid var(--line);color:var(--dim);font:inherit;font-size:16px;padding:4px 12px;text-align:right;cursor:pointer;opacity:0;transition:opacity .2s}
+body:hover .more-btn,.more-btn:focus-visible,.more-btn.open{opacity:1}
+.more-btn.dot::after{content:" •";color:var(--gold)}
 .note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
 .setrow{display:flex;gap:6px;margin-top:8px}
 .setchk{display:flex;gap:8px;align-items:flex-start;margin-top:8px}.setchk input{margin-top:5px}
@@ -95,6 +98,10 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
       <input type="range" id="rpSlider" min="0" max="1" step="1000" value="0">
       <div class="rp-btns"><button id="rpPlay">Play</button><span class="rp-speeds" id="rpSpeeds"></span></div>
     </div>
+    <!-- (the settings and notes: in this computer's browser or the app, behind a button that only shows with the mouse
+         over the page, so a window capture of it shows just the splits) -->
+    <button type="button" class="more-btn hide" id="moreBtn">Settings</button>
+    <div class="hide" id="more">
     <div class="note hide" id="note"></div>
     <div class="note hide" id="phone"></div>
     <form class="note hide" id="settings">
@@ -105,6 +112,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
       <div id="upInfo"></div>
       <div id="setMsg"></div>
     </form>
+    </div>
   </div>
 </div>
 <script>
@@ -139,7 +147,7 @@ const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const PICKS = ["auto", ...ORDER];
 const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
 let comp = P.get("comp") || store.get("aa-live-comp") || "auto";
-let S = null, connected = false;
+let S = null, connected = false, moreOpen = false;   // (moreOpen: the settings showing)
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 // 1:02:03, or 2:03 under an hour
@@ -445,6 +453,8 @@ function render() {
 
   // (on this computer's browser: the link for a phone on the same Wi-Fi)
   const here = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  $("moreBtn").classList.toggle("hide", !here);
+  $("more").classList.toggle("hide", !(here && moreOpen));
   // (the settings: in this computer's browser only, not in OBS or on a phone)
   $("settings").classList.toggle("hide", !here);
   if (here && document.activeElement !== $("siteIn") && $("siteIn").dataset.was !== (S.siteUrl || "")) { $("siteIn").value = $("siteIn").dataset.was = S.siteUrl || ""; }
@@ -470,8 +480,14 @@ function render() {
     S.updateReady && !window.obsstudio ? "A new version of AA Live is out: it updates the next time you start it." : "",
     S.oldHermes && !window.obsstudio ? `This world's Hermes (${S.oldHermes}) doesn't log biomes, so the biome splits can't be timed and the checklist can't tell where you are: update Hermes to 0.14 or newer.` : ""].filter(Boolean).join(" ");
   $("note").textContent = note; $("note").classList.toggle("hide", !note);
+  // (something to read in there: a dot on the button)
+  $("moreBtn").classList.toggle("dot", !!note && !moreOpen);
 }
 // every frame (for the milliseconds)
+// the settings button: opens and closes them; they close again when the mouse leaves the page (unless being typed in)
+const setMore = v => { moreOpen = v; $("moreBtn").textContent = v ? "Hide settings" : "Settings"; $("moreBtn").classList.toggle("open", v); render(); };
+$("moreBtn").onclick = () => setMore(!moreOpen);
+document.documentElement.addEventListener("mouseleave", () => { if (moreOpen && !$("more").contains(document.activeElement)) setMore(false); });
 $("settings").addEventListener("submit", async e => {
   e.preventDefault();
   const r = await fetch("/settings", {method: "POST", body: JSON.stringify({site: $("siteIn").value, autoUpload: $("upOn").checked, token: $("upTok").value})}).catch(() => null);
