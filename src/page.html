@@ -26,7 +26,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .t1{font-weight:700;font-size:20px;white-space:nowrap}
 .t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:20px}
 .t2 .num{text-align:right;white-space:nowrap}
-.t3{display:flex;justify-content:center;align-items:baseline;gap:18px;margin-top:2px;font-size:20px;white-space:nowrap}
+.t3{display:flex;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:2px 18px;margin-top:2px;font-size:20px;white-space:nowrap}
 .vs{padding:0 5px;border:2px solid var(--line)}
 .vs:empty{display:none}
 .vs.pace{border-color:var(--gold);color:var(--gold)}
@@ -45,11 +45,13 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .r .d{text-align:right;min-width:58px}
 .r .tm{text-align:right}
 .ahead{color:#2ee86a} .ahead-lose{color:#8fe3a9} .behind-gain{color:#f08a80} .behind{color:#ff3b30} .gold{color:var(--gold)}
-.detail{display:flex;align-items:flex-end;gap:10px;padding:6px 12px 2px}
-.dl{flex:1;min-width:0;display:grid;gap:2px;padding-bottom:2px}
+/* (when the comparison's lines and the timer don't fit side by side, the timer is made smaller, see fitClock, or if
+   that's not enough, goes under them) */
+.detail{display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 10px;padding:6px 12px 2px}
+.dl{flex:0 0 auto;display:grid;gap:2px;padding-bottom:2px}
 .dc{font-size:20px;white-space:nowrap}
 .t2 .st{text-align:left;color:var(--dim);font-size:20px;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.dr{text-align:right;white-space:nowrap}
+.dr{text-align:right;white-space:nowrap;margin-left:auto}
 .big{font-size:50px;font-weight:700;line-height:.86;font-variant-numeric:tabular-nums}
 .big .ms{font-size:30px}
 .big.paused{color:var(--dim)}
@@ -97,9 +99,9 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 // how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
-const D = /*DISPLAY*/{};
+const D = /*DISPLAY*/{}, LINK_BG = P.has("bg");
 // (size 1: as if not set, so a phone still fits it to its width)
-for (const k of ["comp", "ms", "rows", "scale", "bg"]) if (!P.has(k) && D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k]));
+for (const k of ["comp", "ms", "rows", "scale", "bg", "clock"]) if (!P.has(k) && D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k]));
 // ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
 const APP = P.get("app") === "1";
 // how many splits and sub-splits are listed at once: ?rows= (8 without it)
@@ -107,10 +109,14 @@ const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
 // the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
 // browser tab (where there's nothing behind the page)
 const bgParam = parseFloat(P.get("bg"));
-const bg = Number.isFinite(bgParam) ? Math.min(100, Math.max(0, bgParam)) : window.obsstudio ? 0 : 100;
-document.documentElement.style.setProperty("--bg-alpha", bg / 100);
+// (also when it's changed in the settings: without reloading the page)
+const setBg = p => {
+  const v = Number.isFinite(p) ? Math.min(100, Math.max(0, p)) : window.obsstudio ? 0 : 100;
+  document.documentElement.style.setProperty("--bg-alpha", v / 100);
+  document.documentElement.style.background = !window.obsstudio && !Number.isFinite(p) ? "#000" : "";
+};
 // (in a browser, all of the page is black, past the end of the splits too)
-if (!window.obsstudio && !Number.isFinite(bgParam)) document.documentElement.style.background = "#000";
+setBg(bgParam);
 // (in OBS, nothing scrolls: the source shows the top of the page)
 if (window.obsstudio) document.documentElement.style.overflow = "hidden";
 // ?scale=1.5 makes it all that much bigger (it's 440 pixels wide at 1, or the OBS source's width)
@@ -123,7 +129,7 @@ const fit = () => {
   el.style.zoom = z;
   el.style.width = window.obsstudio || APP ? Math.max(window.obsstudio ? 440 : 300, Math.floor(innerWidth / z)) + "px" : "";
 };
-fit(); addEventListener("resize", fit);
+fit(); addEventListener("resize", () => { fit(); fitClock(); });
 const cycleStore = new Map();   // (see cycle in render)
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
 const comp = P.get("comp") || "auto";
@@ -135,7 +141,18 @@ const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(M
 // the same with milliseconds, smaller
 // (?ms= is how many decimals: 0 to 3, 3 without it)
 const decimals = /^[0-3]$/.test(P.get("ms") || "") ? Number(P.get("ms")) : 3;
-const fmtMs = (ms, long) => fmt(ms, long) + (decimals ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0").slice(0, decimals)}</span>` : "");
+// (?clock=short: the timers grow like LiveSplit's, 24.301, 1:24.301, then 1:00:24.301)
+const SHORT = P.get("clock") === "short";
+const grow = (ms, long) => SHORT && ms < 60000 ? String(Math.floor(Math.max(0, ms) / 1000)) : fmt(ms, long && !(SHORT && ms < 3600000));
+// The timers next to the comparison's lines: smaller if they don't fit beside them (down to 60%; any smaller, and they
+// go under them instead, full size)
+const fitClock = () => {
+  const box = document.querySelector(".detail"), dl = box.querySelector(".dl"), dr = box.querySelector(".dr");
+  dr.style.zoom = "";
+  const room = box.clientWidth - 24 - 10 - dl.offsetWidth, need = dr.offsetWidth;
+  if (need > room && room / need >= 0.6) dr.style.zoom = String(Math.floor(room / need * 100) / 100);
+};
+const fmtMs = (ms, long) => grow(ms, long) + (decimals ? `<span class="ms">.${String(Math.floor(Math.max(0, ms)) % 1000).padStart(3, "0").slice(0, decimals)}</span>` : "");
 // a difference: −9.4 under a minute, otherwise −1:23 (or +1:02:03)
 const delta = ms => (ms < 0 ? "−" : "+") + (Math.abs(ms) < 60000 ? (Math.floor(Math.abs(ms) / 100) / 10).toFixed(1) : fmt(Math.abs(ms)));
 // LiveSplit's colours: ahead or behind, and gaining or losing time in that split (gold: the best that split has been)
@@ -157,7 +174,11 @@ $("rpSpeeds").onclick = e => { const b = e.target.closest("button"); if (b) repl
 const es = new EventSource("/events");
 es.onmessage = e => { S = JSON.parse(e.data); connected = true;
   // (the look changed in the settings: again, with it)
-  if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) { location.reload(); return; }
+  if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) {
+    // (only the background: in place, unless the link sets its own)
+    if (JSON.stringify({...S.display, bg: 0}) === JSON.stringify({...D, bg: 0})) { D.bg = S.display.bg; if (!LINK_BG) setBg(D.bg ?? NaN); }
+    else { location.reload(); return; }
+  }
   render(); };
 // (paused or unpaused just now: ahead of the next full update)
 es.addEventListener("quick", e => { if (S && !S.replay) { Object.assign(S, JSON.parse(e.data)); render(); } });
@@ -400,6 +421,7 @@ function render() {
   const on = rows[ri];
   const t = $("timer");
   put(t, fmtMs(now, true));
+  fitClock();
   // (its colour: the split it's on, once that shows a time, else the last finished)
   const liveD = on && ce(on.i) != null && soon(now - ce(on.i), c(on.i)) ? now - ce(on.i) : prevD;
   t.className = "big " + (S.done ? (pb && now < pb.final ? "gold" : C && C.final != null ? colour(now - C.final, true) : "") : !running ? "paused" : C ? colour(liveD, true) : "");

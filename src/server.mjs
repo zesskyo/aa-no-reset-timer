@@ -118,7 +118,7 @@ const settings = readJson(ownFile("settings.json")) || {};
 let SITE = opt("site") ?? settings.site ?? "";
 // how the splits look (the settings page; a link's ?comp=, ?ms=… still win): what they compare with, the decimals, how
 // many rows, the size, the background
-const DISPLAY_DEFAULTS = {comp: "auto", ms: 3, rows: 8, scale: 1, bg: null};
+const DISPLAY_DEFAULTS = {comp: "auto", ms: 3, rows: 8, scale: 1, bg: null, clock: "full"};
 const display = () => ({...DISPLAY_DEFAULTS, ...(settings.display || {})});
 // (the last few hundred lines it's printed, for a bug report: /report.txt)
 const logLines = [];
@@ -601,6 +601,7 @@ const server = http.createServer((req, res) => {
       if (j && j.display && typeof j.display === "object") {
         const d = {...display()}, x = j.display, num = (v, a, b) => Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : null;
         if (["auto", "pb", "avg", "best", "worst", "wr"].includes(x.comp)) d.comp = x.comp;
+        if (["full", "short"].includes(x.clock)) d.clock = x.clock;
         if (num(x.ms, 0, 3) != null) d.ms = Math.round(num(x.ms, 0, 3));
         if (num(x.rows, 2, 30) != null) d.rows = Math.round(num(x.rows, 2, 30));
         if (num(x.scale, 0.5, 4) != null) d.scale = num(x.scale, 0.5, 4);

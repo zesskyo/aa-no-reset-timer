@@ -31,7 +31,9 @@ button.primary{background:var(--on);border-color:var(--on)}
 .msg.bad{color:var(--bad)}.msg.good{color:var(--good)}
 .notes p{margin:0 0 8px;color:var(--gold)}
 code{background:var(--row);padding:2px 6px;user-select:all;overflow-wrap:anywhere}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.end{color:var(--dim);font-size:14px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 14px}
+.two select,.two input{width:100%;min-width:0}
 .hide{display:none!important}
 a{color:inherit}
 </style>
@@ -60,11 +62,12 @@ a{color:inherit}
         <option value="best">Best Segments</option><option value="worst">Worst Segments</option><option value="wr">World Record</option></select></label>
       <label class="f"><span>Decimals</span><select id="ms"><option value="3">0.000</option><option value="2">0.00</option><option value="1">0.0</option><option value="0">none</option></select></label>
       <label class="f"><span>Rows of splits</span><input id="rows" type="number" min="2" max="30" step="1"></label>
+      <label class="f"><span>Clock</span><select id="clock"><option value="full">Always 0:00:24</option><option value="short">Grows: 24 › 1:24 › 1:00:24</option></select></label>
       <label class="f"><span>Size</span><select id="scale"><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="0.75">0.75×</option></select></label>
     </div>
-    <label class="f"><span>Background: <b id="bgV"></b></span>
-      <span class="row"><input id="bg" type="range" min="0" max="100" step="5"><button id="bgAuto">Default</button></span></label>
-    <p class="note">Default: see-through in an OBS browser source, black in the app or a browser.</p>
+    <label class="f"><span>Background transparency: <b id="bgV"></b></span>
+      <span class="row"><span class="end">Solid</span><input id="bg" type="range" min="0" max="100" step="1"><span class="end">See-through</span><button id="bgAuto">Default</button></span></label>
+    <p class="note">How much of what's behind the timer shows through its background. Default: fully see-through in an OBS browser source, solid black in the app's window.</p>
     <div class="msg" id="lookMsg"></div>
   </section>
 
@@ -95,12 +98,15 @@ const $ = id => document.getElementById(id), app = window.aaApp || null;   // (a
 let S = null, filled = false;
 const post = async body => { const r = await fetch("/settings", {method: "POST", body: JSON.stringify(body)}).catch(() => null); return !r ? "Couldn't reach AA Live" : r.ok ? "" : await r.text(); };
 const say = (el, text, bad) => { el.textContent = text; el.className = "msg " + (bad ? "bad" : text ? "good" : ""); };
-const look = () => ({comp: $("comp").value, ms: +$("ms").value, rows: +$("rows").value, scale: +$("scale").value, bg: $("bg").dataset.auto === "1" ? null : +$("bg").value});
-const bgText = () => { $("bgV").textContent = $("bg").dataset.auto === "1" ? "default" : $("bg").value + "% black"; };
+// (the slider is how see-through it is; what's kept is how black, 100 minus that, as in a link's ?bg=)
+const look = () => ({comp: $("comp").value, ms: +$("ms").value, rows: +$("rows").value, scale: +$("scale").value, clock: $("clock").value, bg: $("bg").dataset.auto === "1" ? null : 100 - $("bg").value});
+const bgText = () => { const v = +$("bg").value; $("bgV").textContent = $("bg").dataset.auto === "1" ? "default" : v === 0 ? "solid black" : v === 100 ? "fully see-through" : v + "%"; };
 async function saveLook() { bgText(); const e = await post({display: look()}); say($("lookMsg"), e || "Saved", !!e); }
-for (const id of ["comp", "ms", "scale"]) $(id).addEventListener("change", saveLook);
+for (const id of ["comp", "ms", "scale", "clock"]) $(id).addEventListener("change", saveLook);
 $("rows").addEventListener("change", saveLook);
-$("bg").addEventListener("input", () => { $("bg").dataset.auto = "0"; bgText(); });
+// (while it's dragged: the timer follows, a few times a second)
+let bgWait = null;
+$("bg").addEventListener("input", () => { $("bg").dataset.auto = "0"; bgText(); if (!bgWait) bgWait = setTimeout(() => { bgWait = null; post({display: look()}); }, 80); });
 $("bg").addEventListener("change", saveLook);
 $("bgAuto").onclick = () => { $("bg").dataset.auto = "1"; saveLook(); };
 $("siteSave").onclick = async () => { const e = await post({site: $("site").value}); say($("siteMsg"), e || "Saved", !!e); };
@@ -123,7 +129,8 @@ function fill() {
     $("site").value = S.siteUrl || "";
     $("comp").value = d.comp || "auto"; $("ms").value = String(d.ms ?? 3); $("rows").value = d.rows || 8;
     $("scale").value = [...$("scale").options].some(o => +o.value === d.scale) ? String(d.scale) : "1";
-    $("bg").dataset.auto = d.bg == null ? "1" : "0"; $("bg").value = d.bg ?? 100; bgText();
+    $("clock").value = d.clock === "short" ? "short" : "full";
+    $("bg").dataset.auto = d.bg == null ? "1" : "0"; $("bg").value = 100 - (d.bg ?? 100); bgText();
   }
   const u = S.upload || {};
   if (document.activeElement !== $("upOn")) $("upOn").checked = !!u.on;
