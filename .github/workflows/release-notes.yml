@@ -1,0 +1,31 @@
+# Changes a release's notes (what its page says), without building anything again: run by hand from the Actions tab.
+name: Release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's version tag (v1.1.1)"
+        required: true
+      notes:
+        description: "What's new (Markdown)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          make_latest: false   # (an older release stays older)
+          body: |
+            **Download** the file for your computer below: `…-win.exe` (Windows), `…-mac.dmg` (Mac) or `…-linux.AppImage` (Linux). How to install it: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it).
+
+            **Already have AA Live?** No need to download this: it updates itself, the next time it's opened.
+
+            ${{ inputs.notes }}

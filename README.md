@@ -79,7 +79,7 @@ Double-click **app\Replay a run.bat** (Windows) or **app/Replay a run.command** 
 
 ## Updating
 
-**The app** updates itself on Windows and Linux: when it starts, it downloads a new version in the background, asks whether to restart now, and otherwise installs it when you close it. On a Mac (where only signed apps can do that), it says a new version is out, with a link to download it: drag it into Applications over the old one. **Settings › Check for updates** looks again. Then, in OBS, right-click the browser source › **Refresh**. (From 1.0.0, download 1.1.0 once by hand: 1.0.0 can't update itself.)
+**The app** updates itself: when it opens (and every few hours while it's open), it downloads a new version in the background and asks whether to restart now; if not, the new version is put in place when you close it. Nothing to download or install by hand. On a Mac, that needs AA Live in your **Applications** folder (not opened from the .dmg). **Settings › Check for updates** looks again. Then, in OBS, right-click the browser source › **Refresh**. (Versions before 1.1.2 on a Mac, and before 1.1.0 anywhere, can't do that yet: download 1.1.2 once by hand.)
 
 **Without the app:** close AA Live's window and start it again. Each time it starts, it looks for a newer version here on GitHub and puts it in place (a few seconds; with no internet, it just starts). It never updates in the middle of a run: if a new version comes out while it's running, it says so in the settings, and updates the next time. To stop it updating itself, add `--no-update` at the end of the line in the start file.
 

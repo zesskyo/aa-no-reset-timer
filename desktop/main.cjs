@@ -2,7 +2,8 @@
 // window of their own (nothing on them to click: a window capture shows just the splits), and the settings in another
 // (right-click the splits, or Esc). OBS and phones still use the page's link, as before.
 const { app, BrowserWindow, dialog, shell, Menu, ipcMain } = require("electron");
-const { spawn } = require("node:child_process");
+const { spawn, execFileSync } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -102,8 +103,15 @@ function openSettings() {
 function setOnTop(v) { prefs.onTop = !!v; savePrefs(); if (win) win.setAlwaysOnTop(!!v); }
 const tellUpdate = t => { updateText = t; if (settingsWin) settingsWin.webContents.send("aa-update", t); };
 
-// Updating: on Windows and Linux, by itself (downloaded in the background, installed on restarting it); on a Mac
-// (where only a signed app can do that), it says a new version is out, with the link
+// Updating, by itself: the new version downloaded in the background, then put in place when AA Live restarts (now, or
+// the next time it's closed), with nothing to install by hand.
+// - Windows and Linux: electron-updater (the installer runs silently, without its windows)
+// - Mac: an app that isn't signed can't use that, so its own way: the new version's .zip downloaded and unpacked here,
+//   and a little script that waits for AA Live to close puts it in place of this one (and opens it again)
+const restartNow = async version => {
+  const r = await dialog.showMessageBox(win, {type: "info", message: `AA Live ${version} is ready.`, detail: "Restart now to use it, or it's put in place the next time AA Live closes.", buttons: ["Restart now", "Later"], defaultId: 0, cancelId: 1});
+  return r.response === 0;
+};
 let updater = null;
 try { if (app.isPackaged && process.platform !== "darwin") updater = require("electron-updater").autoUpdater; } catch {}
 if (updater) {
@@ -111,33 +119,83 @@ if (updater) {
   updater.on("checking-for-update", () => tellUpdate("Looking for a new version…"));
   updater.on("update-not-available", () => tellUpdate("Up to date"));
   updater.on("download-progress", p => tellUpdate(`Downloading the new version… ${Math.round(p.percent)}%`));
-  updater.on("error", e => tellUpdate("Couldn't check for updates: " + (e && e.message ? e.message.split("\n")[0] : e)));
+  updater.on("error", e => tellUpdate("Couldn't update: " + (e && e.message ? e.message.split("\n")[0] : e)));
   updater.on("update-downloaded", async info => {
-    tellUpdate(`AA Live ${info.version} is ready: it's installed when AA Live closes`);
-    const r = await dialog.showMessageBox(win, {type: "info", message: `AA Live ${info.version} is downloaded.`, detail: "Restart now to use it, or it's installed the next time AA Live closes.", buttons: ["Restart now", "Later"], defaultId: 1, cancelId: 1});
-    if (r.response === 0) { quitting = true; if (server) server.kill(); updater.quitAndInstall(); }
+    tellUpdate(`AA Live ${info.version} is ready: it's put in place when AA Live closes`);
+    if (await restartNow(info.version)) { quitting = true; if (server) server.kill(); updater.quitAndInstall(true, true); }   // (silently, and open again)
   });
 }
-async function checkUpdate(byHand) {
+
+// (the Mac's): the .app this is, if it can be replaced (not run from the .dmg, or from where macOS moved it to check it)
+const macApp = () => {
+  const p = process.execPath.split("/Contents/MacOS/")[0];
+  if (!app.isPackaged || !p.endsWith(".app") || p.includes("/AppTranslocation/") || p.startsWith("/Volumes/")) return null;
+  try { fs.accessSync(path.dirname(p), fs.constants.W_OK); fs.accessSync(p, fs.constants.W_OK); return p; } catch { return null; }
+};
+let macReady = null;   // {from: the new AA Live.app, to: this one}
+async function macDownload(version, asset) {
+  const to = macApp(); if (!to || !asset) return false;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aa-live-update-")), file = path.join(dir, asset.name);
+  const res = await fetch(asset.browser_download_url, {headers: {"User-Agent": "AA-Live"}});
+  if (!res.ok || !res.body) throw new Error("download: " + res.status);
+  const total = +res.headers.get("content-length") || asset.size || 0, out = fs.createWriteStream(file);
+  let got = 0, shown = -1;
+  for await (const chunk of res.body) {
+    if (!out.write(chunk)) await new Promise(r => out.once("drain", r));
+    got += chunk.length;
+    const pc = total ? Math.floor(got / total * 100) : 0; if (pc !== shown) { shown = pc; tellUpdate(`Downloading the new version… ${pc}%`); }
+  }
+  await new Promise((ok, bad) => out.end(e => e ? bad(e) : ok()));
+  execFileSync("/usr/bin/ditto", ["-x", "-k", file, dir]);
+  const from = fs.readdirSync(dir).filter(f => f.endsWith(".app")).map(f => path.join(dir, f))[0];
+  if (!from) throw new Error("no app in " + asset.name);
+  try { execFileSync("/usr/bin/xattr", ["-cr", from]); } catch {}
+  macReady = {from, to};
+  return true;
+}
+function macInstall(reopen) {
+  if (!macReady) return;
+  const {from, to} = macReady; macReady = null;
+  // (waits for this AA Live to be closed, swaps the apps, puts the old one back if that didn't work)
+  const script = `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done
+rm -rf "$2.old"
+if mv "$2" "$2.old" && mv "$1" "$2"; then rm -rf "$2.old"; xattr -cr "$2" 2>/dev/null; else [ -d "$2" ] || mv "$2.old" "$2"; fi
+${reopen ? 'open "$2"' : ""}`;
+  spawn("/bin/sh", ["-c", script, "aa-live-update", from, to], {detached: true, stdio: "ignore"}).unref();
+}
+
+const newer = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+let checking = false;
+async function checkUpdate() {
   if (updater) { try { await updater.checkForUpdates(); } catch {} return; }
+  if (checking || macReady) return; checking = true;
   try {
     tellUpdate("Looking for a new version…");
     const res = await fetch("https://api.github.com/repos/zesskyo/aa-no-reset-timer/releases/latest", {headers: {"User-Agent": "AA-Live"}});
     if (!res.ok) return tellUpdate("Couldn't check for updates");
-    const latest = String((await res.json()).tag_name || "").replace(/^v/, "");
-    const newer = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
-    if (latest && newer(latest, app.getVersion())) {
-      tellUpdate(`AA Live ${latest} is out (you have ${app.getVersion()})`);
-      const r = await dialog.showMessageBox(win, {type: "info", message: `AA Live ${latest} is out (you have ${app.getVersion()}).`, buttons: ["Download", "Later"], defaultId: 0, cancelId: 1});
-      if (r.response === 0) shell.openExternal(RELEASES + "/latest");
-    } else tellUpdate("Up to date");
+    const rel = await res.json(), latest = String(rel.tag_name || "").replace(/^v/, "");
+    if (!latest || !newer(latest, app.getVersion())) return tellUpdate("Up to date");
+    const zip = (rel.assets || []).find(a => /-mac\.zip$/.test(a.name));
+    let ready = false;
+    try { ready = process.platform === "darwin" && await macDownload(latest, zip); } catch (e) { tellUpdate("Couldn't download the new version: " + (e.message || e)); }
+    if (ready) {
+      tellUpdate(`AA Live ${latest} is ready: it's put in place when AA Live closes`);
+      if (await restartNow(latest)) { macInstall(true); app.quit(); }
+      return;
+    }
+    // (where it can't be replaced, like run from the .dmg: the link)
+    tellUpdate(`AA Live ${latest} is out (you have ${app.getVersion()})`);
+    const r = await dialog.showMessageBox(win, {type: "info", message: `AA Live ${latest} is out (you have ${app.getVersion()}).`,
+      detail: process.platform === "darwin" ? "To have it update itself from now on, put AA Live in your Applications folder and open it from there." : "", buttons: ["Download", "Later"], defaultId: 0, cancelId: 1});
+    if (r.response === 0) shell.openExternal(RELEASES + "/latest");
   } catch { tellUpdate("Couldn't check for updates"); }
+  finally { checking = false; }
 }
 
 // for the settings page (preload.cjs)
 ipcMain.handle("aa-on-top", () => !!prefs.onTop);
 ipcMain.handle("aa-set-on-top", (e, v) => setOnTop(v));
-ipcMain.handle("aa-check-update", () => checkUpdate(true));
+ipcMain.handle("aa-check-update", () => checkUpdate());
 ipcMain.handle("aa-update-text", () => updateText);
 ipcMain.on("aa-version", e => { e.returnValue = app.getVersion(); });
 
@@ -151,8 +209,8 @@ app.whenReady().then(async () => {
   // (the first time, with no stats site set: the settings too)
   const st = await getState();
   if (!prefs.seenSettings && st && !st.siteUrl) { prefs.seenSettings = true; savePrefs(); openSettings(); }
-  setTimeout(checkUpdate, 5000);
+  setTimeout(checkUpdate, 5000); setInterval(checkUpdate, 6 * 3600000);   // (and while it's left open)
 });
 // (the timer stops with the app: OBS's source goes blank until it's opened again)
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => { quitting = true; if (server) server.kill(); });
+app.on("before-quit", () => { quitting = true; if (server) server.kill(); macInstall(false); });   // (a new version ready: put in place)
