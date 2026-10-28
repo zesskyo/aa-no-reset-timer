@@ -149,7 +149,7 @@ function loadSite(data, fetchedAt) {
   const advIcons = Object.fromEntries(Object.entries(ITEM_ICONS).filter(([k]) => k.startsWith("adv:")));
   data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...advIcons, ...(data.icons || {})}};
   const document = {getElementById: () => ({textContent: JSON.stringify(data)})};
-  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
+  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, logReader, fixTimerResets, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
   const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1;
   const durs = r => api.derive(r).splits.map((s, i) => s.dur ?? (i === POST ? 0 : null));   // (most runs have no Post-endgame)
   const all = valid.map(durs);
@@ -527,6 +527,20 @@ async function uploadRun(run, w, {full, branch = "main"}) {
 
 let finished = null;   // the run being followed, once it's finished
 const savedRuns = new Map();   // (run key → its time when saved)
+// The run so far, reading only what's new in the log since last time (it's all read again when the log started over,
+// went back (a replay), or when a world opened again put the timer back, see fixTimerResets: then every time)
+let reader = null, readerApi = null, fed = 0, fedEnd = "", refix = false;
+function readRun(api) {
+  const more = text.length >= fed && text.slice(Math.max(0, fed - 200), fed) === fedEnd ? text.slice(fed) : null;
+  if (refix || !reader || readerApi !== api || more == null || (fed > 0 && more.includes('"type":"initialize"'))) {
+    const fixed = api.fixTimerResets(text);
+    refix = fixed !== text;
+    reader = api.logReader("play.log"); readerApi = api;
+    reader.feed(fixed);
+  } else if (more) reader.feed(more);
+  fed = text.length; fedEnd = text.slice(Math.max(0, fed - 200));
+  return reader.result();
+}
 function compute() {
   finished = null;
   const {api} = site, n = api.SPLITS.length;
@@ -539,7 +553,7 @@ function compute() {
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
   if (!text) return empty;
   let run;
-  try { run = api.parseLog(text, "play.log"); } catch { return empty; }
+  try { run = readRun(api); } catch { return empty; }
   // (a replay: only what has happened so far)
   const gf = ghostFacts(run);
   run.st.deep = (gf.deep || []).filter(t => t <= run.finalIgt);
@@ -685,8 +699,8 @@ function tick(sameWorld) {
   try { readNew(sameWorld); } catch (e) { log("Couldn't read the play log: " + e.message); }
   const q = JSON.stringify({open, paused, anchor});
   if (q !== quickSent) { quickSent = q; const msg = "event: quick\ndata: " + q + "\n\n"; for (const c of clients) c.write(msg); }
-  // the splits are worked out again at most once a second (the whole log is read each time)
-  if (changed && Date.now() - lastParse >= 1000) { changed = false; lastParse = Date.now(); update(); }
+  // the splits are worked out again at most 5 times a second (only the new lines are read: see readRun)
+  if (changed && Date.now() - lastParse >= 200) { changed = false; lastParse = Date.now(); update(); }
 }
 setInterval(tick, 100);
 // keep OBS's connection alive
