@@ -475,7 +475,7 @@ function render() {
     return `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>` + (b(prev.i) != null ? ` / ${fmt(Math.max(0, prev.cur - b(prev.i)))}` : ""); })() : "—";
   info += kv("Previous Segment", prevSeg);
   // (a finished run: its final time)
-  info += kv("Pace", S.done ? fmt(now, true) : pace != null ? fmt(pace, true) : "—");
+  info += kv("Current Pace", S.done ? fmt(now, true) : pace != null ? fmt(pace, true) : "—");
   info += kv("Best Possible Time", S.done ? fmt(now, true) : possible != null ? fmt(possible, true) : "—");
   info += kv("Sum of Best Segments", best ? fmt(best.final, true) : "—");
   put($("info"), info);
