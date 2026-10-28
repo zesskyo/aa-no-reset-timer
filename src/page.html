@@ -27,7 +27,8 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .t2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:baseline;font-size:20px}
 .t2 .num{text-align:right;white-space:nowrap}
 .t3{display:flex;justify-content:center;align-items:baseline;gap:18px;margin-top:2px;font-size:20px;white-space:nowrap}
-.vs{cursor:pointer;padding:0 5px;border:2px solid var(--line)}
+.vs{padding:0 5px;border:2px solid var(--line)}
+.vs:empty{display:none}
 .vs.pace{border-color:var(--gold);color:var(--gold)}
 .rows{padding:2px 0}
 .r{display:grid;grid-template-columns:32px 1fr auto 90px;align-items:center;gap:8px;padding:1px 12px;min-height:34px}
@@ -46,8 +47,8 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 .ahead{color:#2ee86a} .ahead-lose{color:#8fe3a9} .behind-gain{color:#f08a80} .behind{color:#ff3b30} .gold{color:var(--gold)}
 .detail{display:flex;align-items:flex-end;gap:10px;padding:6px 12px 2px}
 .dl{flex:1;min-width:0;display:grid;gap:2px;padding-bottom:2px}
-.dc{font-size:20px;white-space:nowrap;cursor:pointer}
-.t2 .st{text-align:left;color:var(--dim);font-size:20px;white-space:nowrap}
+.dc{font-size:20px;white-space:nowrap}
+.t2 .st{text-align:left;color:var(--dim);font-size:20px;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dr{text-align:right;white-space:nowrap}
 .big{font-size:50px;font-weight:700;line-height:.86;font-variant-numeric:tabular-nums}
 .big .ms{font-size:30px}
@@ -60,16 +61,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
    still scrolls, to the settings */
 *{scrollbar-width:none}
 ::-webkit-scrollbar{display:none;width:0;height:0}
-.more-btn{display:block;width:100%;background:none;border:0;border-top:2px solid var(--line);color:var(--dim);font:inherit;font-size:16px;padding:4px 12px;text-align:right;cursor:pointer;opacity:0;transition:opacity .2s}
-body:hover .more-btn,.more-btn:focus-visible,.more-btn.open{opacity:1}
-.more-btn.dot::after{content:" •";color:var(--gold)}
 .note{color:var(--dim);font-size:20px;padding:10px 12px;border-top:2px solid var(--line);overflow-wrap:anywhere}
-.setrow{display:flex;gap:6px;margin-top:8px}
-.setchk{display:flex;gap:8px;align-items:flex-start;margin-top:8px}.setchk input{margin-top:5px}
-#upInfo{opacity:.8}
-.setrow input{flex:1;min-width:0;background:var(--row);border:0;color:var(--text);font:inherit;font-size:18px;padding:4px 8px}
-.setrow button{border:0;background:var(--row);color:var(--text);font:inherit;font-size:20px;padding:4px 10px;cursor:pointer}
-.setrow button:hover{background:var(--on)}
 .hide{display:none!important}
 /* playing back a run (--replay): the slider and buttons */
 .replay{border-top:2px solid var(--line);padding:10px 12px;display:grid;gap:8px;font-size:20px}
@@ -85,11 +77,11 @@ body:hover .more-btn,.more-btn:focus-visible,.more-btn.open{opacity:1}
   <div class="box">
     <div class="head">
       <div class="t2"><span class="st" id="status"></span><span class="t1" id="title">AA Live</span><span class="num" id="num"></span></div>
-      <div class="t3"><span id="pbT"></span><span id="wrT"></span><span class="vs" id="vsT" title="What it's compared with (click to change)"></span></div>
+      <div class="t3"><span id="pbT"></span><span id="wrT"></span><span class="vs" id="vsT"></span></div>
     </div>
     <div class="rows" id="rows"></div>
     <div class="detail">
-      <div class="dl"><div class="dc" id="segComp" title="Change what you're compared with"></div><div class="dc" id="segBest"></div></div>
+      <div class="dl"><div class="dc" id="segComp"></div><div class="dc" id="segBest"></div></div>
       <div class="dr"><div class="big" id="timer">0:00:00<span class="ms">.000</span></div><div class="seg" id="segTimer"></div></div>
     </div>
     <div class="info" id="info"></div>
@@ -98,27 +90,18 @@ body:hover .more-btn,.more-btn:focus-visible,.more-btn.open{opacity:1}
       <input type="range" id="rpSlider" min="0" max="1" step="1000" value="0">
       <div class="rp-btns"><button id="rpPlay">Play</button><span class="rp-speeds" id="rpSpeeds"></span></div>
     </div>
-    <!-- (the settings and notes: in this computer's browser or the app, behind a button that only shows with the mouse
-         over the page, so a window capture of it shows just the splits) -->
-    <button type="button" class="more-btn hide" id="moreBtn">Settings</button>
-    <div class="hide" id="more">
-    <div class="note hide" id="note"></div>
-    <div class="note hide" id="phone"></div>
-    <form class="note hide" id="settings">
-      <label for="siteIn">Stats site (optional): your <a href="https://github.com/zesskyo/aa-stats" target="_blank" rel="noopener" style="color:inherit">aa-stats</a> site's link, to compare with its runs. Without one, it compares with the runs you finish with AA Live.</label>
-      <div class="setrow"><input id="siteIn" type="url" placeholder="https://you.github.io/your-site/" autocomplete="off" spellcheck="false"><button type="submit">Save</button></div>
-      <label class="setchk"><input type="checkbox" id="upOn"> Upload each finished run to the stats site: once its seed is known (do /seed) and you leave the world</label>
-      <div class="setrow" id="upTokRow"><input id="upTok" type="password" placeholder="GitHub token (only once)" autocomplete="off" spellcheck="false"></div>
-      <div id="upInfo"></div>
-      <div id="setMsg"></div>
-    </form>
-    </div>
   </div>
 </div>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
+// how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
+const D = /*DISPLAY*/{};
+// (size 1: as if not set, so a phone still fits it to its width)
+for (const k of ["comp", "ms", "rows", "scale", "bg"]) if (!P.has(k) && D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k]));
+// ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
+const APP = P.get("app") === "1";
 // how many splits and sub-splits are listed at once: ?rows= (8 without it)
 const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
 // the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
@@ -138,16 +121,13 @@ const scale = parseFloat(P.get("scale"));
 const fit = () => {
   const w = Math.min(innerWidth, screen.width || innerWidth), z = Number.isFinite(scale) && scale > 0 ? scale : !window.obsstudio && w < 440 ? w / 440 : 1, el = document.querySelector(".split");
   el.style.zoom = z;
-  el.style.width = window.obsstudio ? Math.max(440, Math.floor(innerWidth / z)) + "px" : "";
+  el.style.width = window.obsstudio || APP ? Math.max(window.obsstudio ? 440 : 300, Math.floor(innerWidth / z)) + "px" : "";
 };
 fit(); addEventListener("resize", fit);
 const cycleStore = new Map();   // (see cycle in render)
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
-// what can be picked to compare with: "auto" is the average, switching to the PB while the run's on PB pace
-const PICKS = ["auto", ...ORDER];
-const store = {get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
-let comp = P.get("comp") || store.get("aa-live-comp") || "auto";
-let S = null, connected = false, moreOpen = false;   // (moreOpen: the settings showing)
+const comp = P.get("comp") || "auto";
+let S = null, connected = false;
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 // 1:02:03, or 2:03 under an hour
@@ -175,19 +155,14 @@ $("rpPlay").onclick = () => S && S.replay && replayTo({play: S.replay.playing ? 
 $("rpSpeeds").innerHTML = SPEEDS.map(x => `<button data-speed="${x}">${x}×</button>`).join("");
 $("rpSpeeds").onclick = e => { const b = e.target.closest("button"); if (b) replayTo({speed: b.dataset.speed}); };
 const es = new EventSource("/events");
-es.onmessage = e => { S = JSON.parse(e.data); connected = true; render(); };
+es.onmessage = e => { S = JSON.parse(e.data); connected = true;
+  // (the look changed in the settings: again, with it)
+  if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) { location.reload(); return; }
+  render(); };
 // (paused or unpaused just now: ahead of the next full update)
 es.addEventListener("quick", e => { if (S && !S.replay) { Object.assign(S, JSON.parse(e.data)); render(); } });
 es.onerror = () => { connected = false; render(); };
 
-// clicking the comparison changes it
-$("segComp").onclick = $("vsT").onclick = () => {
-  if (!S) return;
-  const have = PICKS.filter(k => k === "auto" ? S.comps.avg || S.comps.pb : S.comps[k]);
-  comp = have[(have.indexOf(comp) + 1) % have.length] || "auto";
-  store.set("aa-live-comp", comp);
-  render();
-};
 
 // The IGT right now: from the latest line of the log, plus the time since then while the game is running
 // (it never goes back while running: a new line from the game can be a few milliseconds behind the count)
@@ -451,22 +426,6 @@ function render() {
   info += kv("Sum of Best Segments", best ? fmt(best.final, true) : "—");
   put($("info"), info);
 
-  // (on this computer's browser: the link for a phone on the same Wi-Fi)
-  const here = !window.obsstudio && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-  $("moreBtn").classList.toggle("hide", !here);
-  $("more").classList.toggle("hide", !(here && moreOpen));
-  // (the settings: in this computer's browser only, not in OBS or on a phone)
-  $("settings").classList.toggle("hide", !here);
-  if (here && document.activeElement !== $("siteIn") && $("siteIn").dataset.was !== (S.siteUrl || "")) { $("siteIn").value = $("siteIn").dataset.was = S.siteUrl || ""; }
-  // (uploading: on or off, and whether a token's saved; never the token itself)
-  if (here && S.upload) {
-    const u = S.upload;
-    if (document.activeElement !== $("upOn")) $("upOn").checked = u.on;
-    $("upTok").placeholder = u.token ? "GitHub token: saved (type - to forget it)" : "GitHub token, that can write to " + (u.repo || "the site's repository");
-    put($("upInfo"), u.msg ? esc(u.msg) : u.on && u.token && !u.repo ? "The stats site doesn't say which repository it's in yet (it does once it's rebuilt on GitHub)" : u.on && u.token ? "Uploads to " + esc(u.repo) : "");
-  }
-  const ph = $("phone"), showPhone = here && S.phone;
-  ph.classList.toggle("hide", !showPhone); if (showPhone) put(ph, `On your phone (same Wi-Fi): <a href="${esc(S.phone)}" style="color:inherit">${esc(S.phone)}</a>`);
   // (playing back a run)
   const rp = S.replay, rpOn = !!rp && !window.obsstudio;
   $("replay").classList.toggle("hide", !rpOn);
@@ -476,24 +435,8 @@ function render() {
     $("rpPlay").textContent = rp.playing ? "Pause" : "Play";
     for (const b of $("rpSpeeds").children) b.classList.toggle("sel", +b.dataset.speed === rp.speed);
   }
-  const note = [!S.siteRuns ? "No finished runs to compare with yet: finish one with AA Live running, or add your stats site below." : "",
-    S.updateReady && !window.obsstudio ? "A new version of AA Live is out: it updates the next time you start it." : "",
-    S.oldHermes && !window.obsstudio ? `This world's Hermes (${S.oldHermes}) doesn't log biomes, so the biome splits can't be timed and the checklist can't tell where you are: update Hermes to 0.14 or newer.` : ""].filter(Boolean).join(" ");
-  $("note").textContent = note; $("note").classList.toggle("hide", !note);
-  // (something to read in there: a dot on the button)
-  $("moreBtn").classList.toggle("dot", !!note && !moreOpen);
 }
 // every frame (for the milliseconds)
-// the settings button: opens and closes them; they close again when the mouse leaves the page (unless being typed in)
-const setMore = v => { moreOpen = v; $("moreBtn").textContent = v ? "Hide settings" : "Settings"; $("moreBtn").classList.toggle("open", v); render(); };
-$("moreBtn").onclick = () => setMore(!moreOpen);
-document.documentElement.addEventListener("mouseleave", () => { if (moreOpen && !$("more").contains(document.activeElement)) setMore(false); });
-$("settings").addEventListener("submit", async e => {
-  e.preventDefault();
-  const r = await fetch("/settings", {method: "POST", body: JSON.stringify({site: $("siteIn").value, autoUpload: $("upOn").checked, token: $("upTok").value})}).catch(() => null);
-  if (r && r.ok) $("upTok").value = "";
-  $("setMsg").textContent = !r ? "Couldn't reach AA Live" : r.ok ? "Saved" : await r.text();
-});
 const frame = () => { render(); requestAnimationFrame(frame); };
 requestAnimationFrame(frame);
 </script>

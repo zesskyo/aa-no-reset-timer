@@ -1,7 +1,7 @@
 {
   "name": "aa-live",
   "productName": "AA Live",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A live splitter for Minecraft AA No Reset runs",
   "author": "Zesskyo",
   "license": "MIT",
@@ -17,14 +17,56 @@
   "build": {
     "appId": "com.zesskyo.aalive",
     "productName": "AA Live",
-    "files": ["main.cjs", "icon.png"],
-    "extraResources": [{"from": "../app/aa-live.mjs", "to": "aa-live.mjs"}],
-    "directories": {"output": "dist"},
-    "win": {"target": "nsis", "icon": "icon.png"},
-    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true, "shortcutName": "AA Live"},
-    "mac": {"target": [{"target": "dmg", "arch": ["universal"]}], "icon": "icon.png", "category": "public.app-category.games"},
-    "linux": {"target": "AppImage", "icon": "icon.png", "category": "Game"},
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../app/aa-live.mjs",
+        "to": "aa-live.mjs"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "AA Live"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "icon.png",
+      "category": "public.app-category.games"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png",
+      "category": "Game"
+    },
     "artifactName": "AA-Live-${version}-${os}.${ext}",
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "zesskyo",
+        "repo": "aa-no-reset-timer"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
   }
 }

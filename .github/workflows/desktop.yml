@@ -56,7 +56,10 @@ jobs:
           tag_name: ${{ inputs.release || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: AA Live ${{ inputs.release || github.ref_name }}
+          # (latest*.yml and the .blockmap: what the app's updater reads)
           files: |
             desktop/dist/*.exe
             desktop/dist/*.dmg
             desktop/dist/*.AppImage
+            desktop/dist/*.blockmap
+            desktop/dist/latest*.yml

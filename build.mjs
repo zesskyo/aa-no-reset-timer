@@ -37,7 +37,8 @@ for (const k of new Set([...SPLITS.map(s => s.icon), ...Object.values(LAST_ICON)
   else if (items.index[id] != null) BASE_ICONS[k] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");
 }
 let page = rd(path.join(here, "src/page.html"));
-for (const [k, f] of [["/*FONT_R*/", "MinecraftRegular.otf"], ["/*FONT_B*/", "MinecraftBold.otf"]]) page = page.replace(k, () => fs.readFileSync(path.join(A, "fonts", f)).toString("base64"));
+let settingsPage = rd(path.join(here, "src/settings.html"));
+for (const [k, f] of [["/*FONT_R*/", "MinecraftRegular.otf"], ["/*FONT_B*/", "MinecraftBold.otf"]]) { const b64 = fs.readFileSync(path.join(A, "fonts", f)).toString("base64"); page = page.replace(k, () => b64); settingsPage = settingsPage.replace(k, () => b64); }
 let s = rd(path.join(here, "src/server.mjs"));
 const rot = rd(path.join(here, "src/rotator.mjs")).replace("export function rotate", "function rotate");
 const put = (k, v) => { if (!s.includes(k)) throw new Error("server.mjs has no " + k); s = s.replace(k, () => v); };
@@ -46,6 +47,7 @@ put('/*SITE_CODE*/""', JSON.stringify(SITE));
 // (and its ghost file reader: when the player is deep in the Nether, for the Debris split)
 put('/*GHOST_CODE*/""', JSON.stringify(rd(path.join(A, "ghost.mjs")).replace(/export function/g, "function") + "\nreturn {readGhost, ghostFacts};"));
 put('/*PAGE*/""', JSON.stringify(page));
+put('/*SETTINGS_PAGE*/""', JSON.stringify(settingsPage));
 put('/*ITEM_ICONS*/{}', JSON.stringify(ITEM_ICONS));
 put('/*BASE_ICONS*/{}', JSON.stringify(BASE_ICONS));
 put('/*BUILD*/0', String(Date.now()));   // (for updating: see "Updating itself" in server.mjs)

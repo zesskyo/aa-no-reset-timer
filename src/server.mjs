@@ -26,6 +26,7 @@ import { rotate } from "./rotator.mjs";
 const SITE_CODE = /*SITE_CODE*/"";
 const GHOST = new Function(/*GHOST_CODE*/"")();
 const PAGE = /*PAGE*/"";
+const SETTINGS_PAGE = /*SETTINGS_PAGE*/"";   // (the settings, at /settings: see src/settings.html)
 const ITEM_ICONS = /*ITEM_ICONS*/{};   // the sub-splits' and the Midgame checklist's icons (see build.mjs)
 const BASE_ICONS = /*BASE_ICONS*/{};   // the splits' own icons, for when there's no stats site to take them from
 const VERSION = "1.0";
@@ -112,10 +113,16 @@ const OWN = process.platform === "darwin" ? path.join(home, "Library", "Applicat
 fs.mkdirSync(path.join(OWN, "runs"), {recursive: true});
 const ownFile = f => path.join(OWN, f);
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return null; } };
-// the settings, changed on the page (or --site): the stats site to compare with, if any
+// the settings, changed in the settings page (or --site): the stats site to compare with, if any
 const settings = readJson(ownFile("settings.json")) || {};
 let SITE = opt("site") ?? settings.site ?? "";
-const log = (...m) => console.log(new Date().toLocaleTimeString(), ...m);
+// how the splits look (the settings page; a link's ?comp=, ?ms=… still win): what they compare with, the decimals, how
+// many rows, the size, the background
+const DISPLAY_DEFAULTS = {comp: "auto", ms: 3, rows: 8, scale: 1, bg: null};
+const display = () => ({...DISPLAY_DEFAULTS, ...(settings.display || {})});
+// (the last few hundred lines it's printed, for a bug report: /report.txt)
+const logLines = [];
+const log = (...m) => { const l = [new Date().toLocaleTimeString(), ...m].join(" "); logLines.push(l); if (logLines.length > 400) logLines.shift(); console.log(l); };
 
 // ---------- The stats site's code and runs ----------
 let site = null;   // {api, comps, icons, title, runs, fetchedAt}
@@ -516,7 +523,8 @@ function compute() {
   const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
     rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, updateReady, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now(),
-    upload: {token: !!settings.token, on: !!settings.autoUpload, repo: siteData && siteData.repo ? siteData.repo.full : null, msg: uploadMsg}};
+    upload: {token: !!settings.token, on: !!settings.autoUpload, repo: siteData && siteData.repo ? siteData.repo.full : null, msg: uploadMsg},
+    display: display(), port: PORT};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
     splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
   if (!text) return empty;
@@ -583,12 +591,23 @@ const server = http.createServer((req, res) => {
     setReplay({t: num("t"), playing: q.has("play") ? q.get("play") === "1" : null, speed: num("speed")});
     res.writeHead(204); res.end();
   } else if (url.pathname === "/settings" && req.method === "POST") {
-    // the settings form on the page (on this computer only)
+    // the settings page's saves (on this computer only)
     if (!["127.0.0.1", "::1", ""].includes(from)) { res.writeHead(403); return res.end(); }
     let body = "";
     req.on("data", c => { body += c; if (body.length > 10000) req.destroy(); });
     req.on("end", () => {
       const j = (() => { try { return JSON.parse(body); } catch { return null; } })();
+      // (how the splits look: any of them)
+      if (j && j.display && typeof j.display === "object") {
+        const d = {...display()}, x = j.display, num = (v, a, b) => Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : null;
+        if (["auto", "pb", "avg", "best", "worst", "wr"].includes(x.comp)) d.comp = x.comp;
+        if (num(x.ms, 0, 3) != null) d.ms = Math.round(num(x.ms, 0, 3));
+        if (num(x.rows, 2, 30) != null) d.rows = Math.round(num(x.rows, 2, 30));
+        if (num(x.scale, 0.5, 4) != null) d.scale = num(x.scale, 0.5, 4);
+        if ("bg" in x) d.bg = x.bg === null || x.bg === "" ? null : num(x.bg, 0, 100);
+        settings.display = d;
+        if (j.site === undefined) { try { fs.writeFileSync(ownFile("settings.json"), JSON.stringify(settings, null, 2)); } catch {} update(); res.writeHead(204); return res.end(); }
+      }
       const s = j && typeof j.site === "string" ? j.site.trim() : null;
       if (s == null || (s && !/^https?:\/\/\S+$/i.test(s))) { res.writeHead(400); return res.end("The stats site has to be a link (https://…), or empty"); }
       // (uploading: on or off, and a GitHub token, only when one's typed in: "-" forgets it)
@@ -604,7 +623,20 @@ const server = http.createServer((req, res) => {
   } else if (url.pathname === "/state.json") {
     res.writeHead(200, {"content-type": "application/json"}); res.end(JSON.stringify(state));
   } else if (url.pathname === "/") {
-    res.writeHead(200, {"content-type": "text/html; charset=utf-8", "cache-control": "no-cache"}); res.end(PAGE);
+    // (with how the splits look in it: the page reloads itself when that changes)
+    res.writeHead(200, {"content-type": "text/html; charset=utf-8", "cache-control": "no-cache"}); res.end(PAGE.replace("/*DISPLAY*/{}", () => JSON.stringify(display())));
+  } else if (url.pathname === "/settings" && req.method === "GET") {
+    if (!["127.0.0.1", "::1", ""].includes(from)) { res.writeHead(403); return res.end("The settings open on this computer only"); }
+    res.writeHead(200, {"content-type": "text/html; charset=utf-8", "cache-control": "no-cache"}); res.end(SETTINGS_PAGE);
+  } else if (url.pathname === "/report.txt") {
+    // a bug report: this version and computer, the settings (not the token), what it printed, and the state it's in
+    if (!["127.0.0.1", "::1", ""].includes(from)) { res.writeHead(403); return res.end(); }
+    const {token, ...safe} = settings;
+    const st = state ? {...state, comps: Object.keys(state.comps || {}), icons: undefined, splits: (state.splits || []).map(x => ({name: x.name, dur: x.dur, from: x.from, has: x.has}))} : null;
+    const text = [`AA Live ${VERSION} (build ${BUILD}) · ${process.platform} ${process.arch} · Node ${process.version} · ${new Date().toISOString()}`,
+      `World: ${world || "-"}\nLog: ${file || "-"}`, "", "Settings: " + JSON.stringify({...safe, token: token ? "(saved)" : null}, null, 2), "",
+      "What it printed:", ...logLines, "", "State: " + JSON.stringify(st, null, 2)].join("\n");
+    res.writeHead(200, {"content-type": "text/plain; charset=utf-8", "content-disposition": 'attachment; filename="aa-live-report.txt"'}); res.end(text);
   } else { res.writeHead(404); res.end(); }
 });
 server.on("error", e => { console.error(e.code === "EADDRINUSE" ? `Port ${PORT} is in use (is AA Live already running?). Use --port to pick another.` : e.message); process.exit(1); });
@@ -612,7 +644,8 @@ server.listen(PORT, LAN ? "0.0.0.0" : "127.0.0.1", () => {
   const link = `http://localhost:${PORT}/`, lan = lanLinks();
   console.log(`\nAA Live ${VERSION}\n  Splits (and the OBS browser source): ${link}`
     + (LAN ? lan.length ? `\n  On your phone (same Wi-Fi):          ` + lan.map(l => l.url + (lan.length > 1 ? ` (${l.name}${l.wifi ? ", Wi-Fi" : ""})` : "")).join("\n                                       ") : "\n  (No Wi-Fi address found: is this computer on a network?)" : "")
-    + `\n  Stats site:    ${SITE || "(none: set one on the page, or it compares with the runs you finish with AA Live)"}\n  Its folder:    ${OWN}\n`);
+    + `\n  Settings:      ${link}settings`
+    + `\n  Stats site:    ${SITE || "(none: set one in the settings, or it compares with the runs you finish with AA Live)"}\n  Its folder:    ${OWN}\n`);
   checkFirewall();
   // (the splits, opened in the browser)
   if (!args.includes("--no-open")) {
