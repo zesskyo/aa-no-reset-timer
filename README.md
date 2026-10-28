@@ -24,7 +24,7 @@ You also need Minecraft 1.16.1 with the [Hermes](https://github.com/DuncanRuns/H
 
 ## Starting it
 
-Open **AA Live**. Its window shows just the splits (nothing on them to click, so a **Window Capture** of it in OBS works). **Right-click the splits › Settings…** (or Ctrl+, / ⌘+,) for its settings: the stats site, uploading runs, how the splits look (what they compare with, decimals, rows, size, background), keeping the window on top, the link for OBS, updates and bug reports. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world. Closing the window stops it (and OBS's browser source goes blank until it's open again).
+Open **AA Live**. Its window shows just the splits (nothing on them to click, so a **Window Capture** of it in OBS works). **Right-click the splits › Settings…** (or press **Esc** on them) for its settings: the stats site, uploading runs, how the splits look (what they compare with, decimals, rows, size, background), keeping the window on top, the link for OBS, updates and bug reports. It finds the world you're playing by itself (through Hermes), and starts over when you make a new world. Closing the window stops it (and OBS's browser source goes blank until it's open again).
 
 The splits are also at <http://localhost:7476/> while it's open: that's the link for OBS (below), and a browser. The settings are also at <http://localhost:7476/settings> (on this computer only).
 

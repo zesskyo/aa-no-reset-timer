@@ -1,6 +1,6 @@
 // AA Live as a desktop app: the timer (app/aa-live.mjs, run in the background by the app's own Node), its splits in a
 // window of their own (nothing on them to click: a window capture shows just the splits), and the settings in another
-// (right-click the splits, or Ctrl+, / Cmd+,). OBS and phones still use the page's link, as before.
+// (right-click the splits, or Esc). OBS and phones still use the page's link, as before.
 const { app, BrowserWindow, dialog, shell, Menu, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
@@ -57,8 +57,8 @@ const safeWeb = w => {
   w.webContents.setWindowOpenHandler(({url}) => { shell.openExternal(url); return {action: "deny"}; });
   w.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(LINK)) { e.preventDefault(); shell.openExternal(url); } });
 };
-// Ctrl+, (Cmd+, on a Mac): the settings
-const shortcut = w => w.webContents.on("before-input-event", (e, input) => { if (input.type === "keyDown" && input.key === "," && (input.control || input.meta)) { e.preventDefault(); openSettings(); } });
+// Esc on the splits: the settings
+const shortcut = w => w.webContents.on("before-input-event", (e, input) => { if (input.type === "keyDown" && input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) { e.preventDefault(); openSettings(); } });
 
 function openWindow() {
   const b = prefs.bounds || {};
@@ -68,7 +68,7 @@ function openWindow() {
   safeWeb(win); shortcut(win);
   // right-click: the settings, on top, quit
   win.webContents.on("context-menu", () => Menu.buildFromTemplate([
-    {label: "Settings…", accelerator: "CmdOrCtrl+,", click: openSettings},
+    {label: "Settings…", accelerator: "Escape", click: openSettings},
     {label: "Keep on top", type: "checkbox", checked: win.isAlwaysOnTop(), click: m => setOnTop(m.checked)},
     {type: "separator"},
     {label: "Quit AA Live", click: () => app.quit()},
@@ -91,7 +91,7 @@ function openSettings() {
   settingsWin = new BrowserWindow({width: 560, height: 760, minWidth: 420, title: "AA Live settings", backgroundColor: "#0b0c0f", autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, "icon.png"), webPreferences: {contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload.cjs")}});
   settingsWin.removeMenu();
-  safeWeb(settingsWin); shortcut(settingsWin);
+  safeWeb(settingsWin);
   // (the bug report: saved where the person picks)
   settingsWin.webContents.session.on("will-download", (e, item) => { item.setSaveDialogOptions({defaultPath: path.join(app.getPath("downloads"), item.getFilename())}); });
   settingsWin.once("ready-to-show", () => settingsWin.show());
@@ -144,7 +144,7 @@ ipcMain.on("aa-version", e => { e.returnValue = app.getVersion(); });
 app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } else openWindow(); });
 app.whenReady().then(async () => {
   // (a Mac has its menu bar: the settings are in it too)
-  Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{label: "AA Live", submenu: [{role: "about"}, {label: "Settings…", accelerator: "Cmd+,", click: openSettings}, {type: "separator"}, {role: "quit"}]}, {role: "editMenu"}]) : null);
+  Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{label: "AA Live", submenu: [{role: "about"}, {label: "Settings…  (Esc on the splits)", click: openSettings}, {type: "separator"}, {role: "quit"}]}, {role: "editMenu"}]) : null);
   startServer();
   try { await whenUp(); } catch { if (!quitting) dialog.showErrorBox("AA Live", "The timer didn't start. Its log: " + logFile()); app.quit(); return; }
   openWindow();
