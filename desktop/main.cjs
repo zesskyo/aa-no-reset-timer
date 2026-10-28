@@ -144,7 +144,7 @@ ipcMain.on("aa-version", e => { e.returnValue = app.getVersion(); });
 app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } else openWindow(); });
 app.whenReady().then(async () => {
   // (a Mac has its menu bar: the settings are in it too)
-  Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{label: "AA Live", submenu: [{role: "about"}, {label: "Settings…  (Esc on the splits)", click: openSettings}, {type: "separator"}, {role: "quit"}]}, {role: "editMenu"}]) : null);
+  Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{label: "AA Live", submenu: [{role: "about"}, {label: "Settings…", click: openSettings}, {type: "separator"}, {role: "quit"}]}, {role: "editMenu"}]) : null);
   startServer();
   try { await whenUp(); } catch { if (!quitting) dialog.showErrorBox("AA Live", "The timer didn't start. Its log: " + logFile()); app.quit(); return; }
   openWindow();
