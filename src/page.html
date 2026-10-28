@@ -101,15 +101,17 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 // how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
-const D = /*DISPLAY*/{}, LINK_BG = P.has("bg"), LINK_SCALE = P.has("scale");
+// (and again whenever they're changed there: in place, see relook)
+const D = /*DISPLAY*/{}, LINKED = new Set(P.keys());
 // (size 1: as if not set, so a phone still fits it to its width)
-for (const k of ["comp", "ms", "rows", "scale", "bg", "clock"]) if (!P.has(k) && D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k]));
+const mergeLook = () => { for (const k of ["comp", "ms", "rows", "scale", "bg", "clock"]) if (!LINKED.has(k)) { if (D[k] != null && !(k === "scale" && D[k] === 1)) P.set(k, String(D[k])); else P.delete(k); } };
+mergeLook();
 // ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
 const APP = P.get("app") === "1";
 // in an OBS browser source (OBS says so on the page, and in its browser's name)
 const OBS = !!window.obsstudio || /\bOBS\//.test(navigator.userAgent);
 // how many splits and sub-splits are listed at once: ?rows= (8 without it)
-const ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
+let ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
 // the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
 // browser tab (where there's nothing behind the page)
 const bgParam = parseFloat(P.get("bg"));
@@ -141,7 +143,7 @@ if (window.ResizeObserver) new ResizeObserver(() => { if (innerWidth !== fitW) r
 setInterval(() => { if (innerWidth !== fitW) refit(); }, 500);
 const cycleStore = new Map();   // (see cycle in render)
 const ORDER = ["pb", "avg", "best", "worst", "wr"];
-const comp = P.get("comp") || "auto";
+let comp = P.get("comp") || "auto";
 let S = null, connected = false;
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -149,10 +151,19 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", 
 const fmt = (ms, long) => { if (ms == null) return "—"; const s = Math.floor(Math.max(0, ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0"); return h || long ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
 // the same with milliseconds, smaller
 // (?ms= is how many decimals: 0 to 3, 3 without it)
-const decimals = /^[0-3]$/.test(P.get("ms") || "") ? Number(P.get("ms")) : 3;
+let decimals = /^[0-3]$/.test(P.get("ms") || "") ? Number(P.get("ms")) : 3;
 // the timer's digits, as in LiveSplit: ?clock=s (1, 1:23, then 1:23:45 as it grows), m (always 0:01) or h (always
 // 0:00:01, without it). The split's own timer: the same, but never with the hours before it needs them.
-const CLOCK = {s: "s", short: "s", m: "m"}[P.get("clock")] || "h", SEG_CLOCK = CLOCK === "h" ? "m" : CLOCK;
+let CLOCK = {s: "s", short: "s", m: "m"}[P.get("clock")] || "h", SEG_CLOCK = CLOCK === "h" ? "m" : CLOCK;
+// The look changed in the settings: all of it again, in place (no reloading: nothing flickers)
+const relook = () => {
+  mergeLook();
+  ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
+  comp = P.get("comp") || "auto";
+  decimals = /^[0-3]$/.test(P.get("ms") || "") ? Number(P.get("ms")) : 3;
+  CLOCK = {s: "s", short: "s", m: "m"}[P.get("clock")] || "h"; SEG_CLOCK = CLOCK === "h" ? "m" : CLOCK;
+  setBg(parseFloat(P.get("bg"))); scale = parseFloat(P.get("scale")); fit();
+};
 const digits = (ms, least) => {
   const s = Math.floor(Math.max(0, ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60, p = n => String(n).padStart(2, "0");
   return h || least === "h" ? `${h}:${p(m)}:${p(x)}` : m || least === "m" ? `${m}:${p(x)}` : String(x);
@@ -187,14 +198,7 @@ $("rpSpeeds").onclick = e => { const b = e.target.closest("button"); if (b) repl
 const es = new EventSource("/events");
 es.onmessage = e => { S = JSON.parse(e.data); connected = true;
   // (the look changed in the settings: again, with it)
-  if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) {
-    // (only the background or the size: in place, unless the link sets its own; anything else, the page again)
-    if (JSON.stringify({...S.display, bg: 0, scale: 0}) === JSON.stringify({...D, bg: 0, scale: 0})) {
-      D.bg = S.display.bg; D.scale = S.display.scale;
-      if (!LINK_BG) setBg(D.bg ?? NaN);
-      if (!LINK_SCALE) { scale = D.scale === 1 ? NaN : D.scale; fit(); }
-    } else { location.reload(); return; }
-  }
+  if (S.display && JSON.stringify(S.display) !== JSON.stringify(D)) { for (const k of Object.keys(D)) delete D[k]; Object.assign(D, S.display); relook(); }
   render(); };
 // (paused or unpaused just now: ahead of the next full update)
 es.addEventListener("quick", e => { if (S && !S.replay) { Object.assign(S, JSON.parse(e.data)); render(); } });
@@ -379,7 +383,10 @@ function render() {
     // the split it's on: shown once it's behind, or just before (see soon; also with its sub-splits or checklist open under it)
     if (r.d == null && r.on && ce(r.i) != null && soon(now - ce(r.i), c(r.i))) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
     // the time: when it ended, for a finished split; otherwise the comparison's
-    list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon: r.icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
+    // (Post-endgame: a nether star until it starts; while it's on, the advancements still to get, taking turns; once
+    // it's done, the last one's)
+    const icon = r.i !== rows.length - 1 || r.fin || S.done ? r.icon : r.on && r.left ? cycle("post", r.left.filter(k => S.icons[k])) || "star" : "star";
+    list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
     if (!open) continue;
     if (more.length) { list.push(...more); continue; }
     // its sub-splits: the next one not done yet is the one it's on

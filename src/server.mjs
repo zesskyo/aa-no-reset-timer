@@ -145,7 +145,9 @@ function localRuns(siteRuns) {
 function loadSite(data, fetchedAt) {
   siteData = data; siteAt = fetchedAt;
   const siteRuns = data.runs || [], mine = localRuns(siteRuns);
-  data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...(data.icons || {})}};
+  // (with every advancement's icon, "adv:<id>": a run's last advancement's is Post-endgame's)
+  const advIcons = Object.fromEntries(Object.entries(ITEM_ICONS).filter(([k]) => k.startsWith("adv:")));
+  data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...advIcons, ...(data.icons || {})}};
   const document = {getElementById: () => ({textContent: JSON.stringify(data)})};
   const api = new Function("document", SITE_CODE + "\nreturn {parseLog, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
   const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1;
@@ -207,7 +209,8 @@ function loadSite(data, fetchedAt) {
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
   for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
-  Object.assign(icons, ITEM_ICONS);
+  // (not every advancement's: only those the run needs are sent with it, see compute)
+  for (const [k, v] of Object.entries(ITEM_ICONS)) if (!k.startsWith("adv:")) icons[k] = v;
   // the run number for a new run: one after the site's last
   const nextNum = Math.max(0, ...api.RUNS.map(r => api.runNum(r))) + 1;
   site = {api, comps, icons, nextNum, title: (data.text && data.text.siteTitle) || "AA No Reset", runs: valid.length, fetchedAt, url: SITE};
@@ -558,11 +561,14 @@ function compute() {
   const d = api.derive(run);
   const end = done0 ? run.finalIgt : now;
   // each split: its time so far, and when it's running, where the running part started
+  const rows0Post = api.SPLITS.length - 1;
   const rows = d.splits.map((s, i) => {
     const segs = s.segs.filter(g => g[1] > g[0]);
     const last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
     const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
-    return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
+    // (Post-endgame, while it's on: the advancements still to get, their icons: config.js' LAST_ICON's, or the game's)
+    const left = i === rows0Post && running ? d.missing.filter(id => id !== api.VVF).map(id => api.LAST_ICON[id] && site.icons[api.LAST_ICON[id]] ? api.LAST_ICON[id] : "adv:" + id) : null;
+    return {name: s.name, icon: s.icon, left, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
       start: s.start, subs: s.subs || null, mid: s.mid || null};
   });
   // nothing running yet (e.g. still in Any%, or between splits): the first split with nothing in it, from the end of the one before
@@ -578,7 +584,10 @@ function compute() {
   const hv = /"hermes_version":"([^"]+)"/.exec(text);
   const oldHermes = run.st.noBiomes && end > 60000 ? (hv ? hv[1].replace(/\+.*/, "") : "?") : null;
   const wetAt = ghostWet();
-  return {...base, num, done: done0, igt: end, splits: rows, oldHermes, wet: wetAt != null && Date.now() - wetAt < 10000};
+  // (the advancements' icons it needs now: Post-endgame's, see rows)
+  const need = rows.flatMap(r => [r.icon, ...(r.left || [])]).filter(k => k && k.startsWith("adv:") && ITEM_ICONS[k]);
+  const icons = need.length ? {...site.icons, ...Object.fromEntries(need.map(k => [k, ITEM_ICONS[k]]))} : site.icons;
+  return {...base, icons, num, done: done0, igt: end, splits: rows, oldHermes, wet: wetAt != null && Date.now() - wetAt < 10000};
 }
 
 // ---------- The page ----------

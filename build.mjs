@@ -28,6 +28,8 @@ for (const [prefix, dir] of [["at:", "adventuring time"], ["mh:", "monsters hunt
   for (const f of fs.readdirSync(path.join(A, "icons", dir))) if (f.endsWith(".png")) ITEM_ICONS[prefix + f.slice(0, -4)] = png(path.join(A, "icons", dir, f));
 // (the icon files named after a biome's newer name: the game's 1.16 one is used in the checklist)
 ITEM_ICONS["at:snowy_tundra"] = ITEM_ICONS["at:snowy_plains"];
+// every advancement's icon, as the game shows it ("adv:<id>"): Post-endgame's goes through those still to get
+for (const [id, [it]] of Object.entries(items.adv || {})) if (items.index[it] != null) ITEM_ICONS["adv:" + id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[it]])).toString("base64");
 // the splits' own icons (and every possible Post-endgame one), for when there's no stats site to take them from: the
 // stats site's icons folder, or an item ("star": a nether star)
 const { SPLITS, LAST_ICON, FALLBACK_LAST_ICON } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SPLITS, LAST_ICON, FALLBACK_LAST_ICON };")();
