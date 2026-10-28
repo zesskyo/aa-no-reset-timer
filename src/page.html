@@ -292,7 +292,7 @@ function render() {
       // (Temperate, the least of them: only while something's being done for it)
       // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
       const shown = midgame.sections.filter(x => x.key !== "debris" && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
-        && (x.split ? x.end == null && (x.done == null || x.start != null) : x.need == null ? x.have > 0 : x.done == null)));   // (done, and ends on leaving: still up until then)
+        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null)));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
       // (in the Nether, Nether Misc first after that); then the rest, the same way
