@@ -13,6 +13,8 @@ Live splitter for Minecraft 1.16.1 **AA No Reset** runs, LiveSplit-style. Follow
 
 > AA Live reads Hermes' ciphered live log. Hermes doesn't allow that for runs submitted to speedrun.com: **don't use AA Live for runs you'll submit.**
 
+<a id="getting-it"></a>
+
 ## Install
 
 From the [latest release](https://github.com/zesskyo/aa-no-reset-timer/releases/latest):

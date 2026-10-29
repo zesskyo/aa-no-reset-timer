@@ -33,4 +33,4 @@ jobs:
 
             - Windows: `…-win.exe` · Mac: `…-mac.dmg` · Linux: `…-linux.AppImage`
             - Already installed: it updates itself
-            - Setup: [Getting it](https://github.com/zesskyo/aa-no-reset-timer#getting-it)
+            - Setup: [Install](https://github.com/zesskyo/aa-no-reset-timer#install)
