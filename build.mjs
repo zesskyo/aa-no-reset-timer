@@ -32,9 +32,9 @@ ITEM_ICONS["at:snowy_tundra"] = ITEM_ICONS["at:snowy_plains"];
 for (const [id, [it]] of Object.entries(items.adv || {})) if (items.index[it] != null) ITEM_ICONS["adv:" + id] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[it]])).toString("base64");
 // the splits' own icons (and every possible Post-endgame one), for when there's no stats site to take them from: the
 // stats site's icons folder, or an item ("star": a nether star)
-const { SPLITS, LAST_ICON, FALLBACK_LAST_ICON } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SPLITS, LAST_ICON, FALLBACK_LAST_ICON };")();
+const { SPLITS, TOP, LAST_ICON, FALLBACK_LAST_ICON } = new Function(rd(path.join(A, "src/config.js")) + "\nreturn { SPLITS, TOP, LAST_ICON, FALLBACK_LAST_ICON };")();
 const BASE_ICONS = {}, ITEM_FOR = {star: "nether_star"};
-for (const k of new Set([...SPLITS.map(s => s.icon), ...Object.values(LAST_ICON), FALLBACK_LAST_ICON].filter(Boolean))) {
+for (const k of new Set([...SPLITS.map(s => s.icon), ...TOP.map(t => t.icon), ...Object.values(LAST_ICON), FALLBACK_LAST_ICON].filter(Boolean))) {
   const f = path.join(A, "icons", k + ".png"), id = ITEM_FOR[k] || k;
   if (fs.existsSync(f)) BASE_ICONS[k] = png(f);
   else if (items.index[id] != null) BASE_ICONS[k] = "data:image/png;base64," + writePng(pickSquares(atlas, items.size, 1, [items.index[id]])).toString("base64");

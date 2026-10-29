@@ -36,6 +36,8 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 /* sub-splits: indented under their split, without icons and a little shorter */
 .r.sub{padding-left:28px}
 .r.part{padding-left:56px;color:var(--dim)}
+/* (a part's sub-splits under it, in Earlygame: Any%'s, Outer End's) */
+.r.sub2{padding-left:44px}
 .r.blank{visibility:hidden}
 .d.prog{color:var(--dim)}
 /* the split it's on, when its sub-splits are open under it: gray, with the sub-split it's on in blue (as in LiveSplit) */
@@ -296,11 +298,14 @@ function render() {
     }
     return c.order[c.i];
   };
-  const checklist = i => {
+  // tk: the main split it's under (1 Midgame, 2 Endgame: only Debris, if it's done then, 3 Post-endgame); cap: how many
+  // rows there's room for (Midgame: what's left of the checklist fills the rest)
+  const checklist = (tk, cap = 0) => {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
-    // (Midgame, and Post-endgame: Midgame's leftovers, done later, timed the same way)
-    if (i === 3 || i === S.splits.length - 1) {
+    // (Debris: under the main split it's done in, see splits.js; before it's started, a count in Midgame)
+    const debrisHere = x => x.key !== "debris" || (x.split ? x.in === tk : tk === 1);
+    {
       // (a split that's just finished shows for a minute, wherever they are, so its final time can be seen; Debris is
       // under the Debris split)
       const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
@@ -308,7 +313,8 @@ function render() {
       const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
       // (Temperate, the least of them: only while something's being done for it)
       // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
-      const shown = midgame.sections.filter(x => x.key !== "debris" && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
+      const shown = tk === 2 ? midgame.sections.filter(x => x.key === "debris" && x.split && x.in === 2 && (x.end == null || justDone(x) || recent(x)))
+        : midgame.sections.filter(x => debrisHere(x) && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
         && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null)));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
@@ -322,8 +328,8 @@ function render() {
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
       const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x) || here(x))) || null;
-      // (nothing for the checklist where they are: just Midgame, with its time in the comparison)
-      if (!focus && !shown.some(x => justDone(x) || x.pin)) return out;
+      // (nothing for the checklist where they are, outside Midgame: just the split, with its time in the comparison)
+      if (tk === 2 && !focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); };
@@ -364,43 +370,73 @@ function render() {
         }
         if (extraRow && !extraPut) out.push(extraRow);   // (Zombie Doctor all that's left: on its own)
       }
+      // Midgame and Post-endgame: the rest of what's left of the checklist, in the rows there's room for (with the
+      // comparison's time for it; in Post-endgame, all of it, even what's hidden until later in Midgame)
+      if (tk === 1 || tk === 3) for (const x of midgame.sections) {
+        if (out.length >= cap) break;
+        if (shown.includes(x) || (x.hidden && tk === 1) || !debrisHere(x) || !(x.split ? x.end == null : x.need != null && x.done == null)) continue;
+        const [cmp] = midCmp(x.key);
+        out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: x.need > 1 ? `${x.have}/${x.need}` : "", dc: "prog", tm: cmp != null ? fmt(cmp) : ""});
+      }
     }
-    else if (i === 4) {
-      // Debris: the netherite there is, out of what's needed, and the TNT per debris
-      const x = midgame.sections.find(y => y.key === "debris");
-      if (x) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: `${x.have}/${x.need}`, dc: "prog", tm: ""}); for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); }
-    }
-    else for (const x of midgame.sections) if (x.need && x.done == null) out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: `${x.have}/${x.need}`, dc: "prog", tm: ""});
     return out;
   };
-  const list = [];
-  for (const r of rows) {
-    if (r.i === rows.length - 1 && !r.has && !r.on) continue;
-    let d = "", dc = "";
-    if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, b(r.i) != null && r.cur < b(r.i)); }
-    const more = r.on && !(r.subs && r.subs.length) && (r.i === 3 || r.i === 4 || r.i === rows.length - 1) ? checklist(r.i) : [];
-    const open = r.on && (r.subs && r.subs.length || more.length);
-    // the split it's on: shown once it's behind, or just before (see soon; also with its sub-splits or checklist open under it)
-    if (r.d == null && r.on && ce(r.i) != null && soon(now - ce(r.i), c(r.i))) { const x = now - ce(r.i); d = delta(x); dc = colour(x, x <= prevD); }
-    // the time: when it ended, for a finished split; otherwise the comparison's
-    // (Post-endgame: a nether star until it starts; while it's on, the advancements still to get, taking turns; once
-    // it's done, the last one's)
-    const icon = r.i !== rows.length - 1 || r.fin || S.done ? r.icon : r.on && r.left ? cycle("post", r.left.filter(k => S.icons[k])) || "star" : "star";
-    list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : ce(r.i))});
-    if (!open) continue;
-    if (more.length) { list.push(...more); continue; }
-    // its sub-splits: the next one not done yet is the one it's on
-    let pd = prevD;
+  // The list: the main splits (S.top: Earlygame, Midgame, Endgame, Post-endgame), and under the one it's on what's in
+  // it: Earlygame's parts (Any%, Outer End, Enchanting; Any% and Outer End with their sub-splits under them while
+  // they're on), Midgame's checklist, Endgame's sub-splits; Debris under the one it's done in. Post-endgame only when
+  // the run has one.
+  const tops = S.top.map((r, k) => ({...r, k, cur: r.dur + (r.from != null ? Math.max(0, now - r.from) : 0)}));
+  const ti = tops.findIndex(r => r.from != null);
+  tops.forEach(r => { r.fin = S.done ? r.has : r.has && r.from == null && ti >= 0 && r.k < ti; r.on = r.k === ti; });
+  const tc = k => C && C.tsplits && C.tsplits[k] != null ? C.tsplits[k] : null, tb = k => best && best.tsplits && best.tsplits[k] != null ? best.tsplits[k] : null;
+  const tce = k => C && C.tends && C.tends[k] != null ? C.tends[k] : null;
+  let tprev = 0;
+  tops.forEach(r => { if (r.fin && tce(r.k) != null) { r.d = r.end - tce(r.k); r.gain = r.d <= tprev; tprev = r.d; } });
+  // a part's (rows: Any%, Outer End, Enchanting, Endgame's) sub-splits, the next one not done yet the one it's on
+  const subRows = (r, cls) => {
+    const out = [];
+    let pd = r.i > 0 && rows[r.i - 1].d != null ? rows[r.i - 1].d : 0;
     const next = r.subs.findIndex(x => x.t == null);
     // (the step it's on started when the last step before it was done, or with the split)
-    if (next >= 0) onSub = {i: r.i, j: next, cur: now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
+    if (r.on && next >= 0) onSub = {i: r.i, j: next, cur: now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
     r.subs.forEach((x, j) => {
       const cmp = cs(r.i, j);
       let sd = "", sc = "";
       if (x.t != null && cmp != null) { const v = x.t - cmp; sd = delta(v); sc = colour(v, v <= pd, x.dur != null && bd(r.i, j) != null && x.dur < bd(r.i, j)); pd = v; }
-      else if (j === next && cmp != null && soon(now - cmp, cd(r.i, j))) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
-      list.push({cls: "sub" + (j === next ? " on" : ""), icon: x.item ? "item:" + x.item : null, name: x.name, d: sd, dc: sc, tm: fmt(x.t != null ? x.t : cmp)});
+      else if (r.on && j === next && cmp != null && soon(now - cmp, cd(r.i, j))) { const v = now - cmp; sd = delta(v); sc = colour(v, v <= pd); }
+      out.push({cls: cls + (r.on && j === next ? " on" : ""), icon: x.item ? "item:" + x.item : null, name: x.name, d: sd, dc: sc, tm: fmt(x.t != null ? x.t : cmp)});
     });
+    return out;
+  };
+  // (room for Midgame's checklist: the rows but Earlygame's, Midgame's and the ones after it)
+  const after = tops.filter(r => r.k > 1 && (r.k < 3 || r.has || r.on)).length;
+  const list = [];
+  for (const r of tops) {
+    if (r.k === 3 && !r.has && !r.on) continue;
+    let d = "", dc = "";
+    if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, tb(r.k) != null && r.cur < tb(r.k)); }
+    else if (r.on && tce(r.k) != null && soon(now - tce(r.k), tc(r.k))) { const x = now - tce(r.k); d = delta(x); dc = colour(x, x <= tprev); }
+    let more = [];
+    if (r.on && r.k === 0) {
+      // Earlygame: Any%, Outer End and Enchanting; the one it's on gray with its sub-splits under it (blue: the one it's on)
+      for (const p of rows.slice(0, 3)) {
+        let pd2 = "", pc2 = "";
+        if (p.d != null) { pd2 = delta(p.d); pc2 = colour(p.d, p.gain, b(p.i) != null && p.cur < b(p.i)); }
+        else if (p.on && ce(p.i) != null && soon(now - ce(p.i), c(p.i))) { const x = now - ce(p.i); pd2 = delta(x); pc2 = colour(x, x <= prevD); }
+        const openP = p.on && p.subs && p.subs.length;
+        more.push({cls: "sub" + (openP ? " parent" : p.on ? " on" : ""), icon: p.icon, name: p.name, d: pd2, dc: pc2, tm: fmt(p.fin ? p.end : ce(p.i))});
+        if (openP) more.push(...subRows(p, "sub2"));
+      }
+    }
+    else if (r.on && r.k === 1) more = checklist(1, Math.max(0, ROWS - 2 - after));
+    else if (r.on && r.k === 2) more = [...(rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: !rows[4].on}, "sub") : []), ...checklist(2)];
+    else if (r.on && r.k === 3) more = checklist(3, ROWS - 2);
+    const open = more.length > 0;
+    // (Post-endgame: a nether star until it starts; while it's on, the advancements still to get, taking turns; once
+    // it's done, the last one's)
+    const icon = r.k !== 3 || r.fin || S.done ? r.icon : r.on && r.left ? cycle("post", r.left.filter(k => S.icons[k])) || "star" : "star";
+    list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : tce(r.k))});
+    list.push(...more);
   }
   // Only ROWS of them at once, like LiveSplit: the one it's on with the next one under it, moving down as it goes
   // (empty rows keep the size the same)
@@ -409,7 +445,7 @@ function render() {
   const parent = list.findIndex(x => x.cls === "parent");
   // (Midgame's checklist: from Midgame down, as much as fits, as long as the one it's on still shows)
   let from = Math.max(0, Math.min(at >= 0 ? at - (ROWS - 2) : parent >= 0 ? parent - 1 : list.length, list.length - ROWS));
-  if (ri === 3 && parent >= 0) from = Math.max(0, Math.min(parent - 1, list.length - ROWS, at >= 0 ? at - 1 : Infinity));
+  if (ti === 1 && parent >= 0) from = Math.max(0, Math.min(parent - 1, list.length - ROWS, at >= 0 ? at - 1 : Infinity));
   const shownRows = list.slice(from, from + ROWS);
   while (shownRows.length < ROWS) shownRows.push({cls: "blank", icon: null, name: "", d: "", dc: "", tm: ""});
   // (the rows are made once and then only changed, so the icons don't flicker)
@@ -479,14 +515,9 @@ function render() {
   put($("segComp"), C && on && key !== "best" ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
   put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
-  const fins = rows.filter(r => r.fin), prev = fins[fins.length - 1];
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
-  // (all four always there, "—" until there's something, so the page is always the same height: for cropping in OBS)
+  // (all of them always there, "—" until there's something, so the page is always the same height: for cropping in OBS)
   let info = "";
-  // (the last finished split: the time gained or lost in it against the comparison, as LiveSplit shows it; gold: its best)
-  const prevSeg = prev && c(prev.i) != null ? (() => { const x = prev.cur - c(prev.i), g = b(prev.i) != null && prev.cur < b(prev.i);
-    return `<span class="${colour(x, x <= 0, g)}">${delta(x)}</span>`; })() : "—";
-  info += kv("Previous Segment", prevSeg);
   // (a finished run: its final time)
   info += kv("Current Pace", S.done ? fmt(now, true) : pace != null ? fmt(pace, true) : "—");
   info += kv("Best Possible Time", S.done ? fmt(now, true) : possible != null ? fmt(possible, true) : "—");

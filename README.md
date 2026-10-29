@@ -2,11 +2,12 @@
 
 Live splitter for Minecraft 1.16.1 **AA No Reset** runs, LiveSplit-style. Follows the world you're playing through [Hermes](https://github.com/DuncanRuns/Hermes).
 
-- Splits: Any%, Outer End, Enchanting, Midgame, Debris, Endgame, Post-endgame
-  - Any%: Overworld, Nether, Bastion/Fortress, Blind, Stronghold, End
-  - Outer End: Elytra, End Leave
+- Splits: Earlygame, Midgame, Endgame, Post-endgame
+  - Earlygame: Any% (Overworld, Nether, Bastion/Fortress, Blind, Stronghold, End), Outer End (Elytra, End Leave), Enchanting
   - Endgame: Setup, Raid, Monument, HDWGH, End Again
-- Midgame checklist: what's left where you are (rare biomes, cats, shells, beacon, skulls, misc criteria), timed
+  - Debris: under Midgame or Endgame, whichever it's done in
+- Midgame checklist: what's left where you are (rare biomes, cats, shells, beacon, skulls, misc criteria), timed; anything with 3 or fewer left wherever you are
+- Post-endgame: everything still left
 - Compares with PB, average, best/worst segments or WR; current pace, best possible time, sum of best
 - Changes: [releases](https://github.com/zesskyo/aa-no-reset-timer/releases)
 

@@ -149,7 +149,7 @@ function loadSite(data, fetchedAt) {
   const advIcons = Object.fromEntries(Object.entries(ITEM_ICONS).filter(([k]) => k.startsWith("adv:")));
   data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...advIcons, ...(data.icons || {})}};
   const document = {getElementById: () => ({textContent: JSON.stringify(data)})};
-  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, logReader, fixTimerResets, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
+  const api = new Function("document", SITE_CODE + "\nreturn {parseLog, logReader, fixTimerResets, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, TOP, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
   const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1;
   const durs = r => api.derive(r).splits.map((s, i) => s.dur ?? (i === POST ? 0 : null));   // (most runs have no Post-endgame)
   const all = valid.map(durs);
@@ -164,6 +164,14 @@ function loadSite(data, fetchedAt) {
     wr: wr ? {name: "World Record" + (wr.meta && wr.meta.runner ? " · " + wr.meta.runner : ""), short: "WR", splits: durs(wr), final: wr.finalIgt} : null,
   };
   if (comps.best) { comps.best.final = comps.best.splits.reduce((a, b) => a + (b || 0), 0); comps.best.name = "Sum of Best"; }
+  // the main splits (TOP: Earlygame, Midgame, Endgame, Post-endgame), which the page lists: each comparison's time for
+  // each (tsplits) and when each ended (tends); for average, best and worst, added up
+  const nt = api.TOP.length, tdurs = r => api.derive(r).top.map((t, k) => t.dur ?? (k === nt - 1 ? 0 : null));
+  const tall = valid.map(tdurs), tagg = f => [...Array(nt)].map((_, k) => { const c = tall.map(x => x[k]).filter(v => v != null); return c.length ? f(c) : null; });
+  const tsum = d => { let t = 0; return d.map(v => t += v || 0); };
+  for (const [k, r] of [["pb", pb], ["wr", wr]]) if (comps[k]) { comps[k].tsplits = tdurs(r); comps[k].tends = api.derive(r).top.map(t => t.end); }
+  for (const [k, f] of [["avg", c => c.reduce((a, b) => a + b, 0) / c.length], ["best", c => Math.min(...c)], ["worst", c => Math.max(...c)]])
+    if (comps[k]) { comps[k].tsplits = tagg(f); comps[k].tends = tsum(comps[k].tsplits); }
   // for the pace: each split's (and step's) time in every run (a split a run didn't have: no time; see the page)
   const ds = valid.map(r => api.derive(r));
   if (ds.length) comps.pace = {
@@ -208,7 +216,7 @@ function loadSite(data, fetchedAt) {
   });
   // icons the page needs: the splits', and every possible last-advancement icon (for Post-endgame)
   const icons = {};
-  for (const k of [...api.SPLITS.map(s => s.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
+  for (const k of [...api.SPLITS.map(s => s.icon), ...api.TOP.map(t => t.icon), ...Object.values(api.LAST_ICON || {}), api.FALLBACK_LAST_ICON]) if (k && api.ICONS[k]) icons[k] = api.ICONS[k];
   // (not every advancement's: only those the run needs are sent with it, see compute)
   for (const [k, v] of Object.entries(ITEM_ICONS)) if (!k.startsWith("adv:")) icons[k] = v;
   // the run number for a new run: one after the site's last
@@ -343,9 +351,9 @@ function ghostWet() {
 
 // From the whole ghost file, every 10 seconds or so (every 2 in The End, waiting for the gateway): when they were deep in
 // the Nether (below y 25, where debris is mined), so the Debris split starts when they go down there rather than at the
-// first debris, when they got to the outer End, where Any% ends, and to their base before a campfire there, where
-// Endgame starts. (Replaying a log: a .ghost beside it.)
-let ghostCache = {f: null, size: -1, clock: 0, at: 0, facts: {}};
+// first debris, when they got to the outer End, where Any% ends, when they left the enchanting table, where Enchanting
+// ends, and when they got to their base before a campfire there, where Endgame starts. (Replaying a log: a .ghost beside it.)
+let ghostCache = {f: null, size: -1, clock: 0, at: 0, facts: {}, marks: ""};
 function ghostFacts(run) {
   try {
     let f = null;
@@ -357,10 +365,11 @@ function ghostFacts(run) {
     if (!f) return {};
     const size = fs.statSync(f).size;
     // (again when there's more of it, or more of the log to line it up with)
-    const clock = (run.clock || []).length;
-    if (f !== ghostCache.f || ((size !== ghostCache.size || clock !== ghostCache.clock) && Date.now() - ghostCache.at > ((run.dims[run.dims.length - 1] || [])[1] === "e" ? 2000 : 10000))) {
+    // (and straight away for a new enchanting-table pickup or campfire: the splits that hang on them)
+    const clock = (run.clock || []).length, marks = ["ench", "campfire"].map(k => (run.st[k] || []).length).join();
+    if (f !== ghostCache.f || marks !== ghostCache.marks || ((size !== ghostCache.size || clock !== ghostCache.clock) && Date.now() - ghostCache.at > ((run.dims[run.dims.length - 1] || [])[1] === "e" ? 2000 : 10000))) {
       const g = GHOST.readGhost(fs.readFileSync(f), run);
-      ghostCache = {f, size, clock, at: Date.now(), facts: g ? GHOST.ghostFacts(g, run.st) : {}};
+      ghostCache = {f, size, clock, marks, at: Date.now(), facts: g ? GHOST.ghostFacts(g, run.st) : {}};
     }
     return ghostCache.facts;
   } catch { return {}; }
@@ -550,21 +559,23 @@ function compute() {
     upload: {token: !!settings.token, on: !!settings.autoUpload, repo: siteData && siteData.repo ? siteData.repo.full : null, msg: uploadMsg},
     display: display(), port: PORT};
   const empty = {...base, num: site.nextNum, done: false, igt: anchor ? anchor.igt : 0,
-    splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false}))};
+    splits: api.SPLITS.map((s, i) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: i === 0 ? 0 : null, has: false})),
+    top: api.TOP.map((s, k) => ({name: s.name, icon: s.icon || api.FALLBACK_LAST_ICON, dur: 0, from: k === 0 ? 0 : null, has: false}))};
   if (!text) return empty;
   let run;
   try { run = readRun(api); } catch { return empty; }
-  // (a replay: only what has happened so far)
-  const gf = ghostFacts(run);
-  run.st.deep = (gf.deep || []).filter(t => t <= run.finalIgt);
-  if (gf.outerEnd != null && (!REPLAY || gf.outerEnd <= run.finalIgt + 1000)) run.st.outerEnd = gf.outerEnd;
+  // (a replay: only what has happened so far. The ghost file up to now: the run's finalIgt is its last advancement)
+  const now = anchor ? Math.max(anchor.igt, run.finalIgt) : run.finalIgt;
+  const gf = ghostFacts({...run, finalIgt: now});
+  run.st.deep = (gf.deep || []).filter(t => t <= now);
+  if (gf.outerEnd != null && (!REPLAY || gf.outerEnd <= now + 1000)) run.st.outerEnd = gf.outerEnd;
   if (gf.campArrive) run.st.campArrive = gf.campArrive;
+  if (gf.enchLeave) run.st.enchLeave = gf.enchLeave.filter(x => x[0] <= now).map(x => [x[0], x[1] != null && x[1] <= now ? x[1] : null]);
   // finished: everything done, or everything but Very Very Frightening once a channeling trident has been in the
   // inventory (Thunderless: waiting for thunder is then optional; if it still comes, the timer carries on)
   // (the stats site's own rule: a run that counts as Thunderful or Thunderless there)
   const done0 = api.derive(run).category !== "Invalid";
   if (done0 && !replay) finished = run;
-  const now = anchor ? Math.max(anchor.igt, run.finalIgt) : run.finalIgt;
   if (!done0) {
     // Still going: the run so far, as if it ended now (and as if back in the Overworld now, so a split that ends on
     // getting back there is shown as running)
@@ -580,16 +591,24 @@ function compute() {
     const segs = s.segs.filter(g => g[1] > g[0]);
     const last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
     const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
-    // (Post-endgame, while it's on: the advancements still to get, their icons: config.js' LAST_ICON's, or the game's)
-    const left = i === rows0Post && running ? d.missing.filter(id => id !== api.VVF).map(id => api.LAST_ICON[id] && site.icons[api.LAST_ICON[id]] ? api.LAST_ICON[id] : "adv:" + id) : null;
-    return {name: s.name, icon: s.icon, left, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
+    return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
       start: s.start, subs: s.subs || null, mid: s.mid || null};
   });
   // nothing running yet (e.g. still in Any%, or between splits): the first split with nothing in it, from the end of the one before
-  if (!done0 && !rows.some(r => r.from != null)) {
+  const firstEmpty = rows => { if (!done0 && !rows.some(r => r.from != null)) {
     const i = rows.findIndex(r => !r.has);
     if (i >= 0) rows[i].from = rows[i].start = i === 0 ? 0 : Math.max(0, ...rows.slice(0, i).filter(r => r.end != null).map(r => r.end));
-  }
+  } };
+  firstEmpty(rows);
+  // the main splits (TOP), which the page lists, with the parts above under them
+  const top = d.top.map((s, k) => {
+    const segs = s.segs.filter(g => g[1] > g[0]), last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
+    // (Post-endgame, while it's on: the advancements still to get, their icons: config.js' LAST_ICON's, or the game's)
+    const left = k === d.top.length - 1 && running ? d.missing.filter(id => id !== api.VVF).map(id => api.LAST_ICON[id] && site.icons[api.LAST_ICON[id]] ? api.LAST_ICON[id] : "adv:" + id) : null;
+    const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
+    return {name: s.name, icon: s.icon, left, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null, start: s.start};
+  });
+  firstEmpty(top);
   // its run number: the site's, if it's already on the site (looking at an old world), or the next one
   const known = api.RUNS.find(r => sameRun(r, run));
   const num = known ? api.runNum(known) : site.nextNum;
@@ -599,9 +618,9 @@ function compute() {
   const oldHermes = run.st.noBiomes && end > 60000 ? (hv ? hv[1].replace(/\+.*/, "") : "?") : null;
   const wetAt = ghostWet();
   // (the advancements' icons it needs now: Post-endgame's, see rows)
-  const need = rows.flatMap(r => [r.icon, ...(r.left || [])]).filter(k => k && k.startsWith("adv:") && ITEM_ICONS[k]);
+  const need = [...rows, ...top].flatMap(r => [r.icon, ...(r.left || [])]).filter(k => k && k.startsWith("adv:") && ITEM_ICONS[k]);
   const icons = need.length ? {...site.icons, ...Object.fromEntries(need.map(k => [k, ITEM_ICONS[k]]))} : site.icons;
-  return {...base, icons, num, done: done0, igt: end, splits: rows, oldHermes, wet: wetAt != null && Date.now() - wetAt < 10000};
+  return {...base, icons, num, done: done0, igt: end, splits: rows, top, oldHermes, wet: wetAt != null && Date.now() - wetAt < 10000};
 }
 
 // ---------- The page ----------
