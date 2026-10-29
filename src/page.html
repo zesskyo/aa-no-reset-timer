@@ -393,13 +393,21 @@ function render() {
   let tprev = 0;
   tops.forEach(r => { if (r.fin && tce(r.k) != null) { r.d = r.end - tce(r.k); r.gain = r.d <= tprev; tprev = r.d; } });
   // a part's (rows: Any%, Outer End, Enchanting, Endgame's) sub-splits, the next one not done yet the one it's on
-  const subRows = (r, cls) => {
+  // (Endgame's: in the order they're done, then the one it's on, then the rest; Debris, which can come anywhere among
+  // them, is the one it's on only while it's going, and while it is, or just was, its checklist rows stand for it)
+  const subRows = (r, cls, eg = null) => {
     const out = [];
     let pd = r.i > 0 && rows[r.i - 1].d != null ? rows[r.i - 1].d : 0;
-    const next = r.subs.findIndex(x => x.t == null);
+    const next = eg ? (eg.debrisOn ? 0 : r.subs.findIndex((x, j) => j > 0 && x.t == null)) : r.subs.findIndex(x => x.t == null);
+    const js = r.subs.map((_, j) => j);
+    if (eg) { const done = js.filter(j => r.subs[j].t != null).sort((a, b) => r.subs[a].t - r.subs[b].t), rest = js.filter(j => r.subs[j].t == null);
+      js.splice(0, js.length, ...done, ...rest.filter(j => j === next), ...rest.filter(j => j !== next)); }
     // (the step it's on started when the last step before it was done, or with the split)
-    if (r.on && next >= 0) onSub = {i: r.i, j: next, cur: now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
-    r.subs.forEach((x, j) => {
+    if (r.on && next >= 0) onSub = {i: r.i, j: next, cur: eg ? now - (eg.debrisOn ? rows[4].from ?? now : Math.max(r.start ?? 0, ...r.subs.map(x => x.t).filter(t => t != null)))
+      : now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
+    js.forEach(j => {
+      const x = r.subs[j];
+      if (eg && j === 0 && eg.debrisRows.length) { out.push(...eg.debrisRows); return; }
       const cmp = cs(r.i, j);
       let sd = "", sc = "";
       if (x.t != null && cmp != null) { const v = x.t - cmp; sd = delta(v); sc = colour(v, v <= pd, x.dur != null && bd(r.i, j) != null && x.dur < bd(r.i, j)); pd = v; }
@@ -429,7 +437,7 @@ function render() {
       }
     }
     else if (r.on && r.k === 1) more = checklist(1, Math.max(0, ROWS - 2 - after));
-    else if (r.on && r.k === 2) more = [...(rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: !rows[4].on}, "sub") : []), ...checklist(2)];
+    else if (r.on && r.k === 2) { const dr = checklist(2); more = rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: true}, "sub", {debrisOn: rows[4].on, debrisRows: dr}) : dr; }
     else if (r.on && r.k === 3) more = checklist(3, ROWS - 2);
     const open = more.length > 0;
     // (Post-endgame: a nether star until it starts; while it's on, the advancements still to get, taking turns; once
