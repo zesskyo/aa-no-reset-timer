@@ -312,12 +312,14 @@ function render() {
       const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
       const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
       // (Temperate, the least of them: only while something's being done for it)
+      // (Debris's count, before its split: only while debris has been mined, or they've been deep down, in the last 2
+      // minutes, not for a piece of TNT used for Uneasy Alliance: activeWith in config.js)
       // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
       // (in Midgame, anything something's been done for stays, wherever they are, until more recent ones push it out
       // of the rows there's room for: see the order below)
       const shown = tk === 2 ? midgame.sections.filter(x => x.key === "debris" && x.split && x.in === 2 && (x.end == null || justDone(x) || recent(x)))
         : midgame.sections.filter(x => debrisHere(x) && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
-        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null)
+        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null && (x.last === undefined || x.last != null && S.igt - x.last < 120000))
         || tk === 1 && x.split && x.key !== "animals" && x.end == null && x.start != null && x.last != null));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
