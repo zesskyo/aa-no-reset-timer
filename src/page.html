@@ -299,7 +299,7 @@ function render() {
     return c.order[c.i];
   };
   // tk: the main split it's under (1 Midgame, 2 Endgame: only Debris, if it's done then, 3 Post-endgame); cap: how many
-  // rows there's room for (Midgame: what's left of the checklist fills the rest)
+  // rows there's room for (Post-endgame: what's left of the checklist fills the rest)
   const checklist = (tk, cap = 0) => {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
@@ -370,11 +370,11 @@ function render() {
         }
         if (extraRow && !extraPut) out.push(extraRow);   // (Zombie Doctor all that's left: on its own)
       }
-      // Midgame and Post-endgame: the rest of what's left of the checklist, in the rows there's room for (with the
-      // comparison's time for it; in Post-endgame, all of it, even what's hidden until later in Midgame)
-      if (tk === 1 || tk === 3) for (const x of midgame.sections) {
+      // Post-endgame: the rest of what's left of the checklist, in the rows there's room for (with the comparison's time
+      // for it), even what's hidden until later in Midgame
+      if (tk === 3) for (const x of midgame.sections) {
         if (out.length >= cap) break;
-        if (shown.includes(x) || (x.hidden && tk === 1) || !debrisHere(x) || !(x.split ? x.end == null : x.need != null && x.done == null)) continue;
+        if (shown.includes(x) || !debrisHere(x) || !(x.split ? x.end == null : x.need != null && x.done == null)) continue;
         const [cmp] = midCmp(x.key);
         out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: x.need > 1 ? `${x.have}/${x.need}` : "", dc: "prog", tm: cmp != null ? fmt(cmp) : ""});
       }
@@ -416,8 +416,6 @@ function render() {
     });
     return out;
   };
-  // (room for Midgame's checklist: the rows but Earlygame's, Midgame's and the ones after it)
-  const after = tops.filter(r => r.k > 1 && (r.k < 3 || r.has || r.on)).length;
   const list = [];
   for (const r of tops) {
     if (r.k === 3 && !r.has && !r.on) continue;
@@ -436,7 +434,7 @@ function render() {
         if (openP) more.push(...subRows(p, "sub2"));
       }
     }
-    else if (r.on && r.k === 1) more = checklist(1, Math.max(0, ROWS - 2 - after));
+    else if (r.on && r.k === 1) more = checklist(1);
     else if (r.on && r.k === 2) { const dr = checklist(2); more = rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: true}, "sub", {debrisOn: rows[4].on, debrisRows: dr}) : dr; }
     else if (r.on && r.k === 3) more = checklist(3, ROWS - 2);
     const open = more.length > 0;
