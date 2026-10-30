@@ -313,24 +313,32 @@ function render() {
       const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
       // (Temperate, the least of them: only while something's being done for it)
       // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
+      // (in Midgame, anything something's been done for stays, wherever they are, until more recent ones push it out
+      // of the rows there's room for: see the order below)
       const shown = tk === 2 ? midgame.sections.filter(x => x.key === "debris" && x.split && x.in === 2 && (x.end == null || justDone(x) || recent(x)))
         : midgame.sections.filter(x => debrisHere(x) && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
-        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null)));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
+        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null)
+        || tk === 1 && x.split && x.key !== "animals" && x.end == null && x.start != null && x.last != null));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
       // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
-      // (in the Nether, Nether Misc first after that); then the rest, the same way
+      // (in the Nether, Nether Misc first after that); then elsewhere what was worked on in the last 2 minutes; what's
+      // nearly done (pinned); and the rest, the most recently worked on first
       const here = x => x.area.includes(midgame.area);
       // (underwater in the last 10 seconds, in the ocean: the shells first, or the trident once they're done)
       // (from the ghost file while playing: swimming or below sea level; or else seagrass or kelp broken, drowned killed)
       const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && S.igt - midgame.underwater < 10000));
       const wetKey = wet ? ["shells", "trident"].find(k => { const y = midgame.sections.find(z => z.key === k); return y && y.split && y.end == null; }) : null;
-      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : x.pin ? 7 : recent(x) ? 5 : 6;
-      shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : x.pin ? 6 : 7;
+      shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5, 7].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
       // (the one it's on: the first not finished)
+      const starts = [];
       const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x) || here(x))) || null;
       // (nothing for the checklist where they are, outside Midgame: just the split, with its time in the comparison)
       if (tk === 2 && !focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
+        // (Midgame: only what fits, the first always; what doesn't, whole, is left out)
+        if (tk === 1 && cap && out.length >= cap) break;
+        starts.push(out.length);
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); };
         if (!x.split) { out.push({cls: "sub", icon: iconOf(x.item), name: x.name, d: x.need == null ? String(x.have) : `${x.have}/${x.need}`, dc: "prog", tm: ""}); info(); continue; }
@@ -370,6 +378,7 @@ function render() {
         }
         if (extraRow && !extraPut) out.push(extraRow);   // (Zombie Doctor all that's left: on its own)
       }
+      if (tk === 1 && cap && out.length > cap) out.length = Math.max(starts[1] ?? out.length, ...starts.filter(i => i <= cap));
       // Post-endgame: the rest of what's left of the checklist, in the rows there's room for (with the comparison's time
       // for it), even what's hidden until later in Midgame
       if (tk === 3) for (const x of midgame.sections) {
@@ -416,6 +425,8 @@ function render() {
     });
     return out;
   };
+  // (room for Midgame's checklist: the rows but Earlygame's, Midgame's and the ones after it)
+  const after = tops.filter(r => r.k > 1 && (r.k < 3 || r.has || r.on)).length;
   const list = [];
   for (const r of tops) {
     if (r.k === 3 && !r.has && !r.on) continue;
@@ -434,7 +445,7 @@ function render() {
         if (openP) more.push(...subRows(p, "sub2"));
       }
     }
-    else if (r.on && r.k === 1) more = checklist(1);
+    else if (r.on && r.k === 1) more = checklist(1, Math.max(1, ROWS - 2 - after));
     else if (r.on && r.k === 2) { const dr = checklist(2); more = rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: true}, "sub", {debrisOn: rows[4].on, debrisRows: dr}) : dr; }
     else if (r.on && r.k === 3) more = checklist(3, ROWS - 2);
     const open = more.length > 0;

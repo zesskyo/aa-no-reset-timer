@@ -6,7 +6,7 @@ Live splitter for Minecraft 1.16.1 **AA No Reset** runs, LiveSplit-style. Follow
   - Earlygame: Any% (Overworld, Nether, Bastion/Fortress, Blind, Stronghold, End), Outer End (Elytra, End Leave), Enchanting
   - Endgame: Debris, Setup, Raid, Monument, HDWGH, End Again
   - Debris: part of Endgame, listed with its sub-splits in the order done
-- Midgame checklist: what's left where you are (rare biomes, cats, shells, beacon, skulls, misc criteria), timed; anything with 3 or fewer left wherever you are
+- Midgame checklist: what you are working on first, then what you worked on most recently (rare biomes, cats, shells, beacon, skulls, misc criteria), timed; anything with 3 or fewer left wherever you are
 - Post-endgame: everything still left
 - Compares with PB, average, best/worst segments or WR; current pace, best possible time, sum of best
 - Changes: [releases](https://github.com/zesskyo/aa-no-reset-timer/releases)
