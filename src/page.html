@@ -325,16 +325,21 @@ function render() {
       // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
       // (in the Nether, Nether Misc first after that); then elsewhere what was worked on in the last 2 minutes; what's
       // nearly done (pinned); and the rest, the most recently worked on first
-      const here = x => x.area.includes(midgame.area);
+      // (where they are counts only for what's timed by being there, the rare biomes and the Nether's (and Nether Misc,
+      // what most of the time there goes on): Beacon Blocks,
+      // Cats and the like run all through Midgame, so being in an ocean or a village isn't working on them, and walking
+      // along a shore would swap them about)
+      const here = x => (x.time === "area" || x.time === "farm" || x.key === "nethermisc") && x.area.includes(midgame.area);
       // (underwater in the last 10 seconds, in the ocean: the shells first, or the trident once they're done)
       // (from the ghost file while playing: swimming or below sea level; or else seagrass or kelp broken, drowned killed)
       const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && S.igt - midgame.underwater < 10000));
       const wetKey = wet ? ["shells", "trident"].find(k => { const y = midgame.sections.find(z => z.key === k); return y && y.split && y.end == null; }) : null;
       const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : x.pin ? 6 : 7;
       shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5, 7].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
-      // (the one it's on: the first not finished)
+      // (the one it's on: something done for it in the last 20 seconds; else the area one they're in, while it's being
+      // timed; else what was worked on in the last 2 minutes; else none)
       const starts = [];
-      const focus = shown.find(x => x.split && x.end == null && (!x.pin || now2(x) || here(x))) || null;
+      const focus = shown.find(x => x.split && x.end == null && (now2(x) || x.key === wetKey || here(x) && x.since != null || recent(x))) || null;
       // (nothing for the checklist where they are, outside Midgame: just the split, with its time in the comparison)
       if (tk === 2 && !focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
