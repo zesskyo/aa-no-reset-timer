@@ -14,7 +14,7 @@
 }
 *{box-sizing:border-box;border-radius:0}
 button{-webkit-appearance:none;appearance:none}
-html,body{margin:0}
+html,body{margin:0;-webkit-user-select:none;user-select:none;cursor:default}
 html,body{background:transparent}
 /* The Minecraft font is drawn on a grid of 1/10 of its size: text is only at sizes that are multiples of 10 (so its
    pixels land on whole screen pixels and it stays sharp), with Minecraft's shadow, one of those pixels down and right */
@@ -110,7 +110,8 @@ const mergeLook = () => { for (const k of ["comp", "ms", "rows", "scale", "bg", 
 mergeLook();
 // ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
 const APP = P.get("app") === "1";
-// (in AA Live's own window with no title bar, a Mac's: dragging the splits moves the window; see desktop/main.cjs)
+// (in AA Live's own window, with no title bar: dragging the splits moves the window, unless it's locked; see
+// desktop/main.cjs)
 if (window.aaWin && window.aaWin.frameless) {
   addEventListener("mousedown", e => { if (e.button === 0 && !e.target.closest("button, input, select, a")) { e.preventDefault(); window.aaWin.drag(true); } });
   for (const ev of ["mouseup", "blur"]) addEventListener(ev, () => window.aaWin.drag(false));
@@ -119,8 +120,8 @@ if (window.aaWin && window.aaWin.frameless) {
 const OBS = !!window.obsstudio || /\bOBS\//.test(navigator.userAgent);
 // how many splits and sub-splits are listed at once: ?rows= (8 without it)
 let ROWS = Math.max(2, Math.min(30, parseInt(P.get("rows")) || 8));
-// the background: ?bg=0 to 100 (or 60%) makes it that much black. Without it: see-through in OBS, and black in a
-// browser tab (where there's nothing behind the page)
+// the background: ?bg=0 to 100 (or 60%) makes it that much black (in AA Live's own window, see-through to what's behind
+// it). Without it: see-through in OBS, and black in a browser tab or the window
 const bgParam = parseFloat(P.get("bg"));
 // (also when it's changed in the settings: without reloading the page)
 const setBg = p => {

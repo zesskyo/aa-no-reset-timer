@@ -61,12 +61,13 @@ const safeWeb = w => {
 // Esc on the splits: the settings
 const shortcut = w => w.webContents.on("before-input-event", (e, input) => { if (input.type === "keyDown" && input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) { e.preventDefault(); openSettings(); } });
 
-// (on a Mac, no title bar, like LiveSplit: moved by dragging the splits, resized from its edges)
-const FRAMELESS = process.platform === "darwin" || process.env.AA_LIVE_FRAMELESS === "1";
+// (no title bar, like LiveSplit: moved by dragging the splits, resized from its edges)
+const FRAMELESS = true;
 function openWindow() {
   const b = prefs.bounds || {};
-  win = new BrowserWindow({width: b.width || 470, height: b.height || 860, x: b.x, y: b.y, minWidth: 300, minHeight: 200, title: "AA Live", backgroundColor: "#000000",
-    autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), frame: !FRAMELESS,
+  // (see-through: the background transparency setting shows what's behind; Auto keeps it black, see the page)
+  win = new BrowserWindow({width: b.width || 470, height: b.height || 860, x: b.x, y: b.y, minWidth: 300, minHeight: 200, title: "AA Live", backgroundColor: "#00000000",
+    transparent: true, autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), frame: !FRAMELESS,
     webPreferences: {contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload-splits.cjs")}});
   win.removeMenu();
   safeWeb(win); shortcut(win);
@@ -74,7 +75,7 @@ function openWindow() {
   win.webContents.on("context-menu", () => Menu.buildFromTemplate([
     {label: "Settings…", accelerator: "Escape", click: openSettings},
     {label: "Keep on top", type: "checkbox", checked: win.isAlwaysOnTop(), click: m => setOnTop(m.checked)},
-    {label: "Click-through while playing", type: "checkbox", checked: prefs.clickThrough !== false, click: m => { prefs.clickThrough = m.checked; savePrefs(); applyPlaying(); }},
+    {label: "Lock position", type: "checkbox", checked: !!prefs.locked, click: m => { prefs.locked = m.checked; savePrefs(); applyLock(); }},
     {type: "separator"},
     {label: "Quit AA Live", click: () => app.quit()},
   ]).popup({window: win}));
@@ -89,16 +90,22 @@ function openWindow() {
   win.on("resized", keep); win.on("moved", keep);
   win.on("closed", () => { win = null; if (settingsWin) settingsWin.close(); });
   win.loadURL(LINK + "?app=1");
-  applyPlaying();
+  applyLock();
 }
 
-// While the game's being played (a world open, not paused): clicks go through the splits to what's behind them, and the
-// splits can't take the focus, so a stray click doesn't take Minecraft out of the game. Paused, or no world: as usual,
-// to move them, right-click them, or open the settings. (From the timer's quick events: open and paused.)
+// Lock position (right-click): the splits can't be moved or resized, and while the game's being played (a world open,
+// not paused) clicks go through them to what's behind, and they can't take the focus, so a stray click doesn't take
+// Minecraft out of the game. Paused, or no world: right-click them, or open the settings. (From the timer's quick
+// events: open and paused.)
 let playing = false;
+function applyLock() {
+  if (!win) return;
+  win.setMovable(!prefs.locked); win.setResizable(!prefs.locked);
+  applyPlaying();
+}
 function applyPlaying() {
   if (!win) return;
-  const through = playing && prefs.clickThrough !== false;
+  const through = playing && !!prefs.locked;
   win.setIgnoreMouseEvents(through, {forward: true});
   if (process.platform !== "linux") win.setFocusable(!through);
 }
@@ -123,7 +130,7 @@ function followGame() {
 let dragging = null;
 ipcMain.on("aa-drag", (e, on) => {
   clearInterval(dragging && dragging.timer); dragging = null;
-  if (!on || !win || !FRAMELESS) return;
+  if (!on || !win || !FRAMELESS || prefs.locked) return;
   const p = screen.getCursorScreenPoint(), [x, y] = win.getPosition();
   dragging = {dx: p.x - x, dy: p.y - y, timer: setInterval(() => {
     if (!win) return;
