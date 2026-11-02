@@ -178,6 +178,11 @@ function loadSite(data, fetchedAt) {
     splits: api.SPLITS.map((_, i) => ds.map(d => d.splits[i].dur ?? 0)),
     subs: api.SPLITS.map((_, i) => { const n = Math.max(0, ...ds.map(d => d.splits[i].subs ? d.splits[i].subs.length : 0));
       return n ? [...Array(n)].map((_, j) => ds.map(d => d.splits[i].subs && d.splits[i].subs[j] ? d.splits[i].subs[j].dur : null).filter(x => x != null)) : null; }),
+    // (Midgame, by how much of the checklist is done: for each run, how much of its Midgame was left once it had done
+    // none of it, one thing, two... [whole Midgame, after the 1st, after the 2nd, ...]; see the page)
+    mid: ds.map(d => { const p = d.splits[3]; if (p.start == null || p.end == null || !p.mid) return null;
+      const ts = p.mid.sections.filter(x => x.key !== "debris" && x.done != null).map(x => Math.max(x.done, p.start)).sort((a, b) => a - b);
+      return [p.end - p.start, ...ts.map(t => Math.max(0, p.end - t))]; }).filter(Boolean),
   };
   // each comparison's split times (the time each split ended at): a real run's own (a split it didn't have ends where the
   // one before did); for average, best and worst, the segments added up, as LiveSplit does

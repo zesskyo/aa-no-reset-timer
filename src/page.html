@@ -514,7 +514,16 @@ function render() {
   const mean = xs => xs && xs.length ? xs.reduce((a, d) => a + d, 0) / xs.length : 0;
   // (nothing of it yet: all the runs, those that hadn't this split too)
   const rest = (xs, cur) => cur > 0 ? mean((xs || []).filter(d => d > cur).map(d => d - cur)) : mean(xs);
+  // (Midgame: by how much of its checklist is done. The runs' Midgame left once they'd done as many things, less the
+  // time since the last one was done here, of the runs that had more left than that: done slowly, most of the rest
+  // usually goes slowly too)
+  const midLeft = r => {
+    const ts = r.mid.sections.filter(x => x.key !== "debris" && x.done != null && x.done <= now).map(x => Math.max(x.done, r.start ?? 0)).sort((a, b) => a - b);
+    const k = ts.length, since = now - (k ? ts[k - 1] : r.start ?? now);
+    return mean(PC.mid.map(a => (a[k] ?? 0) - since).filter(x => x > 0));
+  };
   const paceOn = r => {
+    if (r.mid && PC.mid && PC.mid.length && r.start != null) return midLeft(r);
     const xs = PC.splits[r.i], steps = PC.subs[r.i];
     // (by its steps, as for the best possible time; not Midgame, whose checklist splits overlap)
     if (r.mid || !r.subs || !r.subs.length || !steps || r.subs.some((x, j) => !ownSplit(r, j) && !(steps[j] && steps[j].length))) return rest(xs, r.cur);
