@@ -29,6 +29,8 @@ Needs Minecraft 1.16.1 with SpeedRunIGT and Hermes **0.14+** (biomes; 0.16+ logs
 
 - Open AA Live: the window shows only the splits. It finds the world by itself and starts over on a new world.
 - Settings: right-click the splits › *Settings…*, or **Esc**. Also at <http://localhost:7476/settings>.
+- While you play (a world open, not paused), clicks go through the splits to the game, so a stray click can't take Minecraft out of focus. Pause to move or right-click them. Turn it off: right-click › *Click-through while playing*.
+- Mac: no title bar, like LiveSplit. Drag the splits to move them; resize from the edges; quit with ⌘Q or right-click › *Quit AA Live*.
 - Closing the window stops it.
 
 ## OBS

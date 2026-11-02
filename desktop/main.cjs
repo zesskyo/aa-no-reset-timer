@@ -1,7 +1,7 @@
 // AA Live as a desktop app: the timer (app/aa-live.mjs, run in the background by the app's own Node), its splits in a
 // window of their own (nothing on them to click: a window capture shows just the splits), and the settings in another
 // (right-click the splits, or Esc). OBS and phones still use the page's link, as before.
-const { app, BrowserWindow, dialog, shell, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, shell, Menu, ipcMain, screen } = require("electron");
 const { spawn, execFileSync } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
@@ -61,16 +61,20 @@ const safeWeb = w => {
 // Esc on the splits: the settings
 const shortcut = w => w.webContents.on("before-input-event", (e, input) => { if (input.type === "keyDown" && input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) { e.preventDefault(); openSettings(); } });
 
+// (on a Mac, no title bar, like LiveSplit: moved by dragging the splits, resized from its edges)
+const FRAMELESS = process.platform === "darwin" || process.env.AA_LIVE_FRAMELESS === "1";
 function openWindow() {
   const b = prefs.bounds || {};
   win = new BrowserWindow({width: b.width || 470, height: b.height || 860, x: b.x, y: b.y, minWidth: 300, minHeight: 200, title: "AA Live", backgroundColor: "#000000",
-    autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), webPreferences: {contextIsolation: true, sandbox: true}});
+    autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), frame: !FRAMELESS,
+    webPreferences: {contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload-splits.cjs")}});
   win.removeMenu();
   safeWeb(win); shortcut(win);
   // right-click: the settings, on top, quit
   win.webContents.on("context-menu", () => Menu.buildFromTemplate([
     {label: "Settings…", accelerator: "Escape", click: openSettings},
     {label: "Keep on top", type: "checkbox", checked: win.isAlwaysOnTop(), click: m => setOnTop(m.checked)},
+    {label: "Click-through while playing", type: "checkbox", checked: prefs.clickThrough !== false, click: m => { prefs.clickThrough = m.checked; savePrefs(); applyPlaying(); }},
     {type: "separator"},
     {label: "Quit AA Live", click: () => app.quit()},
   ]).popup({window: win}));
@@ -85,7 +89,48 @@ function openWindow() {
   win.on("resized", keep); win.on("moved", keep);
   win.on("closed", () => { win = null; if (settingsWin) settingsWin.close(); });
   win.loadURL(LINK + "?app=1");
+  applyPlaying();
 }
+
+// While the game's being played (a world open, not paused): clicks go through the splits to what's behind them, and the
+// splits can't take the focus, so a stray click doesn't take Minecraft out of the game. Paused, or no world: as usual,
+// to move them, right-click them, or open the settings. (From the timer's quick events: open and paused.)
+let playing = false;
+function applyPlaying() {
+  if (!win) return;
+  const through = playing && prefs.clickThrough !== false;
+  win.setIgnoreMouseEvents(through, {forward: true});
+  if (process.platform !== "linux") win.setFocusable(!through);
+}
+function followGame() {
+  const again = () => setTimeout(followGame, 1000);
+  http.get(LINK + "events", res => {
+    let buf = "";
+    res.setEncoding("utf8");
+    res.on("data", c => {
+      buf += c;
+      for (let i; (i = buf.indexOf("\n\n")) >= 0; buf = buf.slice(i + 2)) {
+        const msg = buf.slice(0, i);
+        if (!msg.startsWith("event: quick")) continue;
+        try { const q = JSON.parse(msg.slice(msg.indexOf("data: ") + 6)); const p = !!(q.open && !q.paused); if (p !== playing) { playing = p; applyPlaying(); } } catch {}
+      }
+    });
+    res.on("end", again); res.on("error", again);
+  }).on("error", again);
+}
+
+// Dragging the splits (no title bar): the window follows the pointer from the press to the release
+let dragging = null;
+ipcMain.on("aa-drag", (e, on) => {
+  clearInterval(dragging && dragging.timer); dragging = null;
+  if (!on || !win || !FRAMELESS) return;
+  const p = screen.getCursorScreenPoint(), [x, y] = win.getPosition();
+  dragging = {dx: p.x - x, dy: p.y - y, timer: setInterval(() => {
+    if (!win) return;
+    const c = screen.getCursorScreenPoint(); win.setPosition(c.x - dragging.dx, c.y - dragging.dy);
+  }, 8)};
+});
+ipcMain.on("aa-frameless", e => { e.returnValue = FRAMELESS; });
 
 function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
@@ -205,7 +250,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{label: "AA Live", submenu: [{role: "about"}, {label: "Settings…", click: openSettings}, {type: "separator"}, {role: "quit"}]}, {role: "editMenu"}]) : null);
   startServer();
   try { await whenUp(); } catch { if (!quitting) dialog.showErrorBox("AA Live", "The timer didn't start. Its log: " + logFile()); app.quit(); return; }
-  openWindow();
+  openWindow(); followGame();
   // (the first time, with no stats site set: the settings too)
   const st = await getState();
   if (!prefs.seenSettings && st && !st.siteUrl) { prefs.seenSettings = true; savePrefs(); openSettings(); }

@@ -110,6 +110,11 @@ const mergeLook = () => { for (const k of ["comp", "ms", "rows", "scale", "bg", 
 mergeLook();
 // ?app=1: in AA Live's own window (it fills the window's width, like an OBS source)
 const APP = P.get("app") === "1";
+// (in AA Live's own window with no title bar, a Mac's: dragging the splits moves the window; see desktop/main.cjs)
+if (window.aaWin && window.aaWin.frameless) {
+  addEventListener("mousedown", e => { if (e.button === 0 && !e.target.closest("button, input, select, a")) { e.preventDefault(); window.aaWin.drag(true); } });
+  for (const ev of ["mouseup", "blur"]) addEventListener(ev, () => window.aaWin.drag(false));
+}
 // in an OBS browser source (OBS says so on the page, and in its browser's name)
 const OBS = !!window.obsstudio || /\bOBS\//.test(navigator.userAgent);
 // how many splits and sub-splits are listed at once: ?rows= (8 without it)
