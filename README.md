@@ -6,9 +6,9 @@ Live splitter for Minecraft 1.16.1 **AA No Reset** runs, LiveSplit-style. Follow
   - Earlygame: Any% (Overworld, Nether, Bastion/Fortress, Blind, Stronghold, End), Outer End (Elytra, End Leave), Enchanting
   - Endgame: Debris, Setup, Raid, Monument, HDWGH, End Again
   - Debris: part of Endgame, listed with its sub-splits in the order done
-- Midgame checklist: what you are working on first, then what you worked on most recently (rare biomes, cats, shells, beacon, skulls, misc criteria), timed; anything with 3 or fewer left wherever you are
+- Midgame checklist: what you are working on first, then anything that has just gone behind the comparison, the rare biome or Nether area you are in, and what you worked on most recently (rare biomes, cats, shells, beacon, skulls, misc criteria), timed; anything with 3 or fewer left wherever you are. Beacon Blocks comes up for gold blocks (3 or more), not other minerals
 - Post-endgame: everything still left
-- Compares with PB, average, best/worst segments or WR; current pace, best possible time, sum of best
+- Compares with PB, average, best/worst segments or WR; current pace (in Midgame, from how far through the checklist you are, shells and gold blocks included), best possible time, sum of best
 - Changes: [releases](https://github.com/zesskyo/aa-no-reset-timer/releases)
 
 > AA Live reads Hermes' ciphered live log. Hermes doesn't allow that for runs submitted to speedrun.com: **don't use AA Live for runs you'll submit.**

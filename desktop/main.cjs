@@ -61,13 +61,12 @@ const safeWeb = w => {
 // Esc on the splits: the settings
 const shortcut = w => w.webContents.on("before-input-event", (e, input) => { if (input.type === "keyDown" && input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) { e.preventDefault(); openSettings(); } });
 
-// (no title bar, like LiveSplit: moved by dragging the splits, resized from its edges)
-const FRAMELESS = true;
 function openWindow() {
   const b = prefs.bounds || {};
-  // (see-through: the background transparency setting shows what's behind; Auto keeps it black, see the page)
+  // (no title bar or rounded corners, like LiveSplit: moved by dragging the splits, resized from its edges; see-through:
+  // the background transparency setting shows what's behind, Auto keeps it black, see the page)
   win = new BrowserWindow({width: b.width || 470, height: b.height || 860, x: b.x, y: b.y, minWidth: 300, minHeight: 200, title: "AA Live", backgroundColor: "#00000000",
-    transparent: true, autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), frame: !FRAMELESS,
+    transparent: true, autoHideMenuBar: true, show: false, alwaysOnTop: !!prefs.onTop, icon: path.join(__dirname, "icon.png"), frame: false, roundedCorners: false,
     webPreferences: {contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload-splits.cjs")}});
   win.removeMenu();
   safeWeb(win); shortcut(win);
@@ -130,14 +129,13 @@ function followGame() {
 let dragging = null;
 ipcMain.on("aa-drag", (e, on) => {
   clearInterval(dragging && dragging.timer); dragging = null;
-  if (!on || !win || !FRAMELESS || prefs.locked) return;
+  if (!on || !win || prefs.locked) return;
   const p = screen.getCursorScreenPoint(), [x, y] = win.getPosition();
   dragging = {dx: p.x - x, dy: p.y - y, timer: setInterval(() => {
     if (!win) return;
     const c = screen.getCursorScreenPoint(); win.setPosition(c.x - dragging.dx, c.y - dragging.dy);
   }, 8)};
 });
-ipcMain.on("aa-frameless", e => { e.returnValue = FRAMELESS; });
 
 function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }

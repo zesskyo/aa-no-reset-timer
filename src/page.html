@@ -102,6 +102,9 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 "use strict";
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
+// the parts (S.rows, SPLITS in the site's config.js) and the main splits they're in (S.top, TOP)
+const MIDGAME = 3, DEBRIS = 4, ENDGAME = 5;
+const T_EARLY = 0, T_MID = 1, T_END = 2, T_POST = 3;
 // how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
 // (and again whenever they're changed there: in place, see relook)
 const D = /*DISPLAY*/{}, LINKED = new Set(P.keys());
@@ -112,7 +115,7 @@ mergeLook();
 const APP = P.get("app") === "1";
 // (in AA Live's own window, with no title bar: dragging the splits moves the window, unless it's locked; see
 // desktop/main.cjs)
-if (window.aaWin && window.aaWin.frameless) {
+if (window.aaWin) {
   addEventListener("mousedown", e => { if (e.button === 0 && !e.target.closest("button, input, select, a")) { e.preventDefault(); window.aaWin.drag(true); } });
   for (const ev of ["mouseup", "blur"]) addEventListener(ev, () => window.aaWin.drag(false));
 }
@@ -278,11 +281,11 @@ function render() {
   const AVG = S.comps.avg || C;
   const midCmp = k => C && C.mid && C.mid[k] != null ? [C.mid[k], C.short] : AVG && AVG.mid && AVG.mid[k] != null ? [AVG.mid[k], AVG.short] : [null, ""];
   const mb = k => best && best.mid && best.mid[k] != null ? best.mid[k] : null;
-  // Under Midgame, the checklist for the kind of place the runner is in (MIDGAME on the stats site; places they left a
-  // few seconds ago still count): its splits (shown for a minute after they finish), and its counters. The split it's on
-  // (in its area, or being worked on now) is the blue one, with what's left of it under it. Under Post-endgame, what of
-  // the checklist is still not done.
-  const midgame = rows[3] && rows[3].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
+  // Under Midgame, the checklist (MIDGAME in the site's config.js): what's being worked on, what's timed by the area
+  // they're in, what's just finished or just gone red, and what was worked on earlier, as many as there's room for (see
+  // checklist below). The one it's on is the blue one, with what's left of it under it. Under Post-endgame, what of the
+  // checklist is still not done.
+  const midgame = rows[MIDGAME] && rows[MIDGAME].mid, extra = Math.max(0, now - S.igt);   // (extra: live time since the server worked it out)
   // (a checklist item's icon: an item, or one of the stats site's own, like "mh:zoglin")
   // (the stats site's own icons are under "item:icon:<name>", like the rest of the checklist's: see build.mjs)
   const iconOf = it => it.startsWith("icon:") || !it.includes(":") ? "item:" + it : it;
@@ -310,47 +313,56 @@ function render() {
     if (!midgame) return [];
     const out = [], near = midgame.near || [midgame.area];
     // (Debris: under the main split it's done in, see splits.js; before it's started, a count in Midgame)
-    const debrisHere = x => x.key !== "debris" || (x.split ? x.in === tk : tk === 1);
+    const debrisHere = x => x.key !== "debris" || (x.split ? x.in === tk : tk === T_MID);
     {
-      // (a split that's just finished shows for a minute, wherever they are, so its final time can be seen; Debris is
-      // under the Debris split)
-      const justDone = x => x.split && x.complete && S.igt - x.end < 60000;
-      const recent = x => x.split && x.end == null && x.last != null && S.igt - x.last < 120000;
-      const now2 = x => x.split && x.end == null && x.last != null && S.igt - x.last < 20000;
-      // (Temperate, the least of them: only while something's being done for it)
-      // (Debris's count, before its split: only while debris has been mined, or they've been deep down, in the last 2
-      // minutes, not for a piece of TNT used for Uneasy Alliance: activeWith in config.js)
-      // (Adventuring Time: not until enough rare biomes have been gone to, then wherever they are: hidden, pin)
-      // (in Midgame, anything something's been done for stays, wherever they are, until more recent ones push it out
-      // of the rows there's room for: see the order below)
-      const shown = tk === 2 ? midgame.sections.filter(x => x.key === "debris" && x.split && x.in === 2 && (x.end == null || justDone(x) || recent(x)))
-        : midgame.sections.filter(x => debrisHere(x) && !x.hidden && (justDone(x) || now2(x) || (x.pin && x.end == null && x.start != null) || x.key !== "animals" && x.area.some(a => near.includes(a))
-        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null && (x.last === undefined || x.last != null && S.igt - x.last < 120000))
-        || tk === 1 && x.split && x.key !== "animals" && x.end == null && x.start != null && x.last != null));   // (not started yet, like Nether Misc while farming skulls: not shown; done, and ends on leaving: still up until then)
-      // in order: just finished; something done for it in the last 20 seconds (a shell picked up, a drowned or a ghast
-      // killed: straight away, wherever they are); the area they're in, what was worked on in the last 2 minutes first
-      // (in the Nether, Nether Misc first after that); then elsewhere what was worked on in the last 2 minutes; what's
-      // nearly done (pinned); and the rest, the most recently worked on first
-      // (where they are counts only for what's timed by being there, the rare biomes and the Nether's (and Nether Misc,
-      // what most of the time there goes on): Beacon Blocks,
-      // Cats and the like run all through Midgame, so being in an ocean or a village isn't working on them, and walking
-      // along a shore would swap them about)
-      const here = x => (x.time === "area" || x.time === "farm" || x.key === "nethermisc") && x.area.includes(midgame.area);
-      // (underwater in the last 10 seconds, in the ocean: the shells first, or the trident once they're done)
+      const ago = t => S.igt - t, open = x => x.split && x.end == null;
+      // what each item's doing:
+      // - just finished (in the last minute, wherever they are, so its final time can be seen)
+      const justDone = x => x.split && x.complete && ago(x.end) < 60000;
+      // - worked on in the last 2 minutes, or the last 20 seconds (a shell picked up, a drowned or a ghast killed)
+      const recent = x => open(x) && x.last != null && ago(x.last) < 120000;
+      const now2 = x => open(x) && x.last != null && ago(x.last) < 20000;
+      // - gone over the comparison's time in the last 2 minutes, while it's being timed (so falling behind is seen)
+      const redFor = x => { if (!open(x) || x.since == null) return null; const [cmp] = midCmp(x.key), over = (x.dur || 0) + extra - (cmp ?? Infinity); return over > 0 ? over : null; };
+      const justRed = x => { const r = redFor(x); return r != null && r < 120000; };
+      // - timed by being in its area: the rare biomes, the Nether's, and Nether Misc (what most time there goes on).
+      //   Not God Apple, Cats, the shells or Beacon Blocks: they run all through Midgame, so being in a desert, a
+      //   village or an ocean isn't working on them, and walking along a shore would swap them about
+      const areaTimed = x => x.time === "area" || x.time === "farm" || x.key === "nethermisc";
+      const here = x => areaTimed(x) && x.area.includes(midgame.area);
+      // - in the area: the area-timed ones while they're going, and the counts there (Debris's, before its split:
+      //   only while debris was mined or they were deep down in the last 2 minutes, not for a piece of TNT for Uneasy
+      //   Alliance: activeWith in config.js)
+      const nearHere = x => (!x.split || areaTimed(x)) && x.area.some(a => near.includes(a))
+        && (x.split ? x.end == null && x.start != null : x.need == null ? x.have > 0 : x.done == null && (x.last === undefined || x.last != null && ago(x.last) < 120000));
+      // - in Midgame, anything worked on at all stays, until more recent ones push it out of the rows there's room for
+      //   (not Temperate, the least of them: only while something's being done for it; and not what isn't started,
+      //   like Nether Misc while farming skulls)
+      const sticky = x => tk === T_MID && open(x) && x.key !== "animals" && x.start != null && x.last != null;
+      // (Adventuring Time: not until few enough rare biomes are left, x.hidden; then it's pinned, wherever they are, as
+      // is what's nearly done)
+      const shown = tk === T_END ? midgame.sections.filter(x => x.key === "debris" && x.split && x.in === T_END && (x.end == null || justDone(x) || recent(x)))
+        : midgame.sections.filter(x => debrisHere(x) && !x.hidden && (justDone(x) || now2(x) || justRed(x) || (x.pin && x.end == null && x.start != null) || nearHere(x) || sticky(x)));
+      // underwater in the last 10 seconds, in the ocean: the shells first, or the trident once they're done
       // (from the ghost file while playing: swimming or below sea level; or else seagrass or kelp broken, drowned killed)
-      const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && S.igt - midgame.underwater < 10000));
+      const wet = midgame.area === "ocean" && (S.wet || (midgame.underwater != null && ago(midgame.underwater) < 10000));
       const wetKey = wet ? ["shells", "trident"].find(k => { const y = midgame.sections.find(z => z.key === k); return y && y.split && y.end == null; }) : null;
-      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 1.5 : here(x) ? (recent(x) ? 2 : x.key === "nethermisc" ? 3 : 4) : recent(x) ? 5 : x.pin ? 6 : 7;
-      shown.sort((a, b) => rank(a) - rank(b) || ([0, 1, 2, 5, 7].includes(rank(a)) ? (b.end ?? b.last ?? 0) - (a.end ?? a.last ?? 0) : 0));
+      // in order: just finished; then what's being done now: worked on in the last 20 seconds, the shells while
+      // underwater, the area they're in (worked on in the last 2 minutes first, then Nether Misc in the Nether), worked
+      // on elsewhere in the last 2 minutes; then just gone red; nearly done (pinned); and the rest, what was worked on
+      // earlier, as long as there's room. Within each, the most recent first.
+      const rank = x => justDone(x) ? 0 : now2(x) ? 1 : x.key === wetKey ? 2 : here(x) ? (recent(x) ? 3 : x.key === "nethermisc" ? 4 : 5) : recent(x) ? 6 : justRed(x) ? 7 : x.pin ? 8 : 9;
+      const newest = x => x.end ?? x.last ?? 0;
+      shown.sort((a, b) => rank(a) - rank(b) || (rank(a) === 7 ? redFor(a) - redFor(b) : [0, 1, 3, 6, 9].includes(rank(a)) ? newest(b) - newest(a) : 0));
       // (the one it's on: something done for it in the last 20 seconds; else the area one they're in, while it's being
       // timed; else what was worked on in the last 2 minutes; else none)
       const starts = [];
       const focus = shown.find(x => x.split && x.end == null && (now2(x) || x.key === wetKey || here(x) && x.since != null || recent(x))) || null;
       // (nothing for the checklist where they are, outside Midgame: just the split, with its time in the comparison)
-      if (tk === 2 && !focus && !shown.some(x => justDone(x) || x.pin)) return out;
+      if (tk === T_END && !focus && !shown.some(x => justDone(x) || x.pin)) return out;
       for (const x of shown) {
         // (Midgame: only what fits, the first always; what doesn't, whole, is left out)
-        if (tk === 1 && cap && out.length >= cap) break;
+        if (tk === T_MID && cap && out.length >= cap) break;
         starts.push(out.length);
         // (not timed: what's left of it)
         const info = () => { for (const [n, ic, v] of x.info || []) out.push({cls: "sub part", icon: ic, name: n, d: v, dc: "prog", tm: ""}); };
@@ -391,10 +403,10 @@ function render() {
         }
         if (extraRow && !extraPut) out.push(extraRow);   // (Zombie Doctor all that's left: on its own)
       }
-      if (tk === 1 && cap && out.length > cap) out.length = Math.max(starts[1] ?? out.length, ...starts.filter(i => i <= cap));
+      if (tk === T_MID && cap && out.length > cap) out.length = Math.max(starts[1] ?? out.length, ...starts.filter(i => i <= cap));
       // Post-endgame: the rest of what's left of the checklist, in the rows there's room for (with the comparison's time
       // for it), even what's hidden until later in Midgame
-      if (tk === 3) for (const x of midgame.sections) {
+      if (tk === T_POST) for (const x of midgame.sections) {
         if (out.length >= cap) break;
         if (shown.includes(x) || !debrisHere(x) || !(x.split ? x.end == null : x.need != null && x.done == null)) continue;
         const [cmp] = midCmp(x.key);
@@ -425,7 +437,7 @@ function render() {
     if (eg) { const done = js.filter(j => r.subs[j].t != null).sort((a, b) => r.subs[a].t - r.subs[b].t), rest = js.filter(j => r.subs[j].t == null);
       js.splice(0, js.length, ...done, ...rest.filter(j => j === next), ...rest.filter(j => j !== next)); }
     // (the step it's on started when the last step before it was done, or with the split)
-    if (r.on && next >= 0) onSub = {i: r.i, j: next, cur: eg ? now - (eg.debrisOn ? rows[4].from ?? now : Math.max(r.start ?? 0, ...r.subs.map(x => x.t).filter(t => t != null)))
+    if (r.on && next >= 0) onSub = {i: r.i, j: next, cur: eg ? now - (eg.debrisOn ? rows[DEBRIS].from ?? now : Math.max(r.start ?? 0, ...r.subs.map(x => x.t).filter(t => t != null)))
       : now - Math.max(r.start ?? 0, ...r.subs.slice(0, next).map(x => x.t).filter(t => t != null))};
     js.forEach(j => {
       const x = r.subs[j];
@@ -439,17 +451,17 @@ function render() {
     return out;
   };
   // (room for Midgame's checklist: the rows but Earlygame's, Midgame's and the ones after it)
-  const after = tops.filter(r => r.k > 1 && (r.k < 3 || r.has || r.on)).length;
+  const after = tops.filter(r => r.k > T_MID && (r.k < T_POST || r.has || r.on)).length;
   const list = [];
   for (const r of tops) {
-    if (r.k === 3 && !r.has && !r.on) continue;
+    if (r.k === T_POST && !r.has && !r.on) continue;
     let d = "", dc = "";
     if (r.d != null) { d = delta(r.d); dc = colour(r.d, r.gain, tb(r.k) != null && r.cur < tb(r.k)); }
     else if (r.on && tce(r.k) != null && soon(now - tce(r.k), tc(r.k))) { const x = now - tce(r.k); d = delta(x); dc = colour(x, x <= tprev); }
     let more = [];
-    if (r.on && r.k === 0) {
+    if (r.on && r.k === T_EARLY) {
       // Earlygame: Any%, Outer End and Enchanting; the one it's on gray with its sub-splits under it (blue: the one it's on)
-      for (const p of rows.slice(0, 3)) {
+      for (const p of rows.slice(0, MIDGAME)) {
         let pd2 = "", pc2 = "";
         if (p.d != null) { pd2 = delta(p.d); pc2 = colour(p.d, p.gain, b(p.i) != null && p.cur < b(p.i)); }
         else if (p.on && ce(p.i) != null && soon(now - ce(p.i), c(p.i))) { const x = now - ce(p.i); pd2 = delta(x); pc2 = colour(x, x <= prevD); }
@@ -458,13 +470,13 @@ function render() {
         if (openP) more.push(...subRows(p, "sub2"));
       }
     }
-    else if (r.on && r.k === 1) more = checklist(1, Math.max(1, ROWS - 2 - after));
-    else if (r.on && r.k === 2) { const dr = checklist(2); more = rows[5].subs && rows[5].subs.length ? subRows({...rows[5], on: true}, "sub", {debrisOn: rows[4].on, debrisRows: dr}) : dr; }
-    else if (r.on && r.k === 3) more = checklist(3, ROWS - 2);
+    else if (r.on && r.k === T_MID) more = checklist(T_MID, Math.max(1, ROWS - 2 - after));
+    else if (r.on && r.k === T_END) { const dr = checklist(T_END), eg = rows[ENDGAME]; more = eg.subs && eg.subs.length ? subRows({...eg, on: true}, "sub", {debrisOn: rows[DEBRIS].on, debrisRows: dr}) : dr; }
+    else if (r.on && r.k === T_POST) more = checklist(T_POST, ROWS - 2);
     const open = more.length > 0;
     // (Post-endgame: a nether star until it starts; while it's on, the advancements still to get, taking turns; once
     // it's done, the last one's)
-    const icon = r.k !== 3 || r.fin || S.done ? r.icon : r.on && r.left ? cycle("post", r.left.filter(k => S.icons[k])) || "star" : "star";
+    const icon = r.k !== T_POST || r.fin || S.done ? r.icon : r.on && r.left ? cycle("post", r.left.filter(k => S.icons[k])) || "star" : "star";
     list.push({cls: r.on && !open ? "on" : open ? "parent" : "", icon, name: r.name, d, dc, tm: fmt(r.fin ? r.end : tce(r.k))});
     list.push(...more);
   }
@@ -497,7 +509,7 @@ function render() {
   // away, not at the end of the split. (fd: the comparison's step durations. Without them all, or for Midgame, whose
   // checklist splits overlap and don't add up to it: the whole split, as below)
   // (Endgame's Debris step: Debris is a split of its own here, counted with the rest, not again in Endgame)
-  const ownSplit = (r, j) => r.i === 5 && r.subs[j] && r.subs[j].name === "Debris";
+  const ownSplit = (r, j) => r.i === ENDGAME && r.subs[j] && r.subs[j].name === "Debris";
   const leftOn = (r, f, fd) => {
     const whole = Math.max(0, (f(r.i) ?? 0) - r.cur);
     if (f(r.i) == null) return whole;
@@ -509,7 +521,7 @@ function render() {
     if (!parts || !parts.length || parts.some(p => !p.done && p.D == null)) return whole;
     const tail = Math.max(0, f(r.i) - parts.reduce((a, p) => a + (p.D ?? p.cur), 0)), between = Math.max(0, r.cur - parts.reduce((a, p) => a + p.cur, 0));
     // (Endgame: only the steps left, nothing after End Again: some runs end right on it)
-    return parts.filter(p => !p.done).reduce((a, p) => a + Math.max(0, p.D - p.cur), 0) + (r.i === 5 ? 0 : Math.max(0, tail - between));
+    return parts.filter(p => !p.done).reduce((a, p) => a + Math.max(0, p.D - p.cur), 0) + (r.i === ENDGAME ? 0 : Math.max(0, tail - between));
   };
   const left = (f, fd) => rows.filter(r => !r.fin).reduce((a, r) => a + (r.on ? leftOn(r, f, fd) : Math.max(0, (f(r.i) ?? 0) - r.cur)), 0);
   const possible = best ? now + left(b, bd) : null;
@@ -523,10 +535,17 @@ function render() {
   // (Midgame: by how much of its checklist is done. The runs' Midgame left once they'd done as many things, less the
   // time since the last one was done here, of the runs that had more left than that: done slowly, most of the rest
   // usually goes slowly too)
+  // (and, half of it, by how far through each thing they are, a shell or a gold block as much as a whole thing: the
+  // runs' Midgame left once they were as far through, of those that had some left)
   const midLeft = r => {
     const ts = r.mid.sections.filter(x => x.key !== "debris" && x.done != null && x.done <= now).map(x => Math.max(x.done, r.start ?? 0)).sort((a, b) => a - b);
     const k = ts.length, since = now - (k ? ts[k - 1] : r.start ?? now);
-    return mean(PC.mid.map(a => (a[k] ?? 0) - since).filter(x => x > 0));
+    const byCount = mean(PC.mid.map(a => (a[k] ?? 0) - since).filter(x => x > 0));
+    const xs = r.mid.sections.filter(x => x.key !== "debris" && x.need);
+    if (!PC.midP || !PC.midP.length || !xs.length) return byCount;
+    const f = xs.reduce((a, x) => a + Math.min(1, x.have / x.need), 0) / xs.length;
+    const byThrough = mean(PC.midP.map(c => { const h = c.find(([q]) => q >= f - 1e-4); return h ? h[1] : 0; }).filter(x => x > 0));
+    return (byCount + byThrough) / 2;
   };
   const paceOn = r => {
     if (r.mid && PC.mid && PC.mid.length && r.start != null) return midLeft(r);

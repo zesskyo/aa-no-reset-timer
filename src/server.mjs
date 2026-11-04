@@ -142,6 +142,19 @@ function localRuns(siteRuns) {
   for (const r of files.sort((a, b) => b.start - a.start)) if (!has.has(r.start + "|" + r.player) && !worlds.has(worldOf(r))) { out.push(r); worlds.add(worldOf(r)); }
   return out.sort((a, b) => a.start - b.start).map(r => ({...r, meta: {...(r.meta || {}), num: ++num, local: true}}));
 }
+// How far through Midgame's checklist a run was as it went: [fraction, Midgame left] each time it went up, where the
+// fraction is the average over the checklist of how much of each is done (a shell or a gold block counts as its share)
+const countAt = (cs, t) => { let v = 0; for (const [x, c] of cs) { if (x > t) break; v = c; } return v; };
+function throughCurve(p) {
+  const xs = p.mid.sections.filter(x => x.key !== "debris" && x.need && x.prog);
+  if (!xs.length) return null;
+  const through = t => xs.reduce((a, x) => { const [goals, cs, target] = x.prog; return a + Math.min(1, (goals.filter(y => y <= t).length + (cs ? Math.min(countAt(cs, t), target) : 0)) / x.need); }, 0) / xs.length;
+  const ts = new Set([p.start]);
+  for (const x of xs) { for (const t of x.prog[0]) ts.add(t); for (const [t] of x.prog[1] || []) ts.add(t); }
+  const out = []; let last = -1;
+  for (const t of [...ts].filter(t => t >= p.start && t <= p.end).sort((a, b) => a - b)) { const f = through(t); if (f > last + 1e-9) { out.push([+f.toFixed(4), p.end - t]); last = f; } }
+  return out;
+}
 function loadSite(data, fetchedAt) {
   siteData = data; siteAt = fetchedAt;
   const siteRuns = data.runs || [], mine = localRuns(siteRuns);
@@ -150,8 +163,9 @@ function loadSite(data, fetchedAt) {
   data = {...data, runs: [...siteRuns, ...mine], icons: {...BASE_ICONS, ...advIcons, ...(data.icons || {})}};
   const document = {getElementById: () => ({textContent: JSON.stringify(data)})};
   const api = new Function("document", SITE_CODE + "\nreturn {parseLog, logReader, fixTimerResets, derive, validRuns, pbRun, RUNS, runNum, WR, SPLITS, TOP, ADV, ICONS, LAST_ICON, FALLBACK_LAST_ICON, VVF, T, encodeRun, runKey};")(document);
-  const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1;
-  const durs = r => api.derive(r).splits.map((s, i) => s.dur ?? (i === POST ? 0 : null));   // (most runs have no Post-endgame)
+  const valid = api.validRuns(), n = api.SPLITS.length, POST = n - 1, MIDGAME = 3;
+  const derive = r => api.derive(r);   // (worked out once for each run: kept on it, run._d)
+  const durs = r => derive(r).splits.map((s, i) => s.dur ?? (i === POST ? 0 : null));   // (most runs have no Post-endgame)
   const all = valid.map(durs);
   const col = i => all.map(d => d[i]).filter(v => v != null);
   const pb = api.pbRun(), wr = api.WR && api.WR.finalIgt != null ? api.WR : null;
@@ -166,27 +180,30 @@ function loadSite(data, fetchedAt) {
   if (comps.best) { comps.best.final = comps.best.splits.reduce((a, b) => a + (b || 0), 0); comps.best.name = "Sum of Best"; }
   // the main splits (TOP: Earlygame, Midgame, Endgame, Post-endgame), which the page lists: each comparison's time for
   // each (tsplits) and when each ended (tends); for average, best and worst, added up
-  const nt = api.TOP.length, tdurs = r => api.derive(r).top.map((t, k) => t.dur ?? (k === nt - 1 ? 0 : null));
+  const nt = api.TOP.length, tdurs = r => derive(r).top.map((t, k) => t.dur ?? (k === nt - 1 ? 0 : null));
   const tall = valid.map(tdurs), tagg = f => [...Array(nt)].map((_, k) => { const c = tall.map(x => x[k]).filter(v => v != null); return c.length ? f(c) : null; });
   const tsum = d => { let t = 0; return d.map(v => t += v || 0); };
-  for (const [k, r] of [["pb", pb], ["wr", wr]]) if (comps[k]) { comps[k].tsplits = tdurs(r); comps[k].tends = api.derive(r).top.map(t => t.end); }
+  for (const [k, r] of [["pb", pb], ["wr", wr]]) if (comps[k]) { comps[k].tsplits = tdurs(r); comps[k].tends = derive(r).top.map(t => t.end); }
   for (const [k, f] of [["avg", c => c.reduce((a, b) => a + b, 0) / c.length], ["best", c => Math.min(...c)], ["worst", c => Math.max(...c)]])
     if (comps[k]) { comps[k].tsplits = tagg(f); comps[k].tends = tsum(comps[k].tsplits); }
   // for the pace: each split's (and step's) time in every run (a split a run didn't have: no time; see the page)
-  const ds = valid.map(r => api.derive(r));
+  const ds = valid.map(derive);
+  const mids = ds.map(d => d.splits[MIDGAME]).filter(p => p.start != null && p.end != null && p.mid);
   if (ds.length) comps.pace = {
     splits: api.SPLITS.map((_, i) => ds.map(d => d.splits[i].dur ?? 0)),
     subs: api.SPLITS.map((_, i) => { const n = Math.max(0, ...ds.map(d => d.splits[i].subs ? d.splits[i].subs.length : 0));
       return n ? [...Array(n)].map((_, j) => ds.map(d => d.splits[i].subs && d.splits[i].subs[j] ? d.splits[i].subs[j].dur : null).filter(x => x != null)) : null; }),
     // (Midgame, by how much of the checklist is done: for each run, how much of its Midgame was left once it had done
     // none of it, one thing, two... [whole Midgame, after the 1st, after the 2nd, ...]; see the page)
-    mid: ds.map(d => { const p = d.splits[3]; if (p.start == null || p.end == null || !p.mid) return null;
-      const ts = p.mid.sections.filter(x => x.key !== "debris" && x.done != null).map(x => Math.max(x.done, p.start)).sort((a, b) => a - b);
-      return [p.end - p.start, ...ts.map(t => Math.max(0, p.end - t))]; }).filter(Boolean),
+    mid: mids.map(p => { const ts = p.mid.sections.filter(x => x.key !== "debris" && x.done != null).map(x => Math.max(x.done, p.start)).sort((a, b) => a - b);
+      return [p.end - p.start, ...ts.map(t => Math.max(0, p.end - t))]; }),
+    // (and by how far through each thing on it they were, a shell or a gold block as much as a whole thing: for each
+    // run, [how far through, how much of its Midgame was left] each time that went up; see the page)
+    midP: mids.map(throughCurve).filter(Boolean),
   };
   // each comparison's split times (the time each split ended at): a real run's own (a split it didn't have ends where the
   // one before did); for average, best and worst, the segments added up, as LiveSplit does
-  const endsOf = r => { let t = 0; return api.derive(r).splits.map(s => t = s.end ?? t); };
+  const endsOf = r => { let t = 0; return derive(r).splits.map(s => t = s.end ?? t); };
   const sums = d => { let t = 0; return d.map(v => t += v || 0); };
   if (comps.pb) comps.pb.ends = endsOf(pb);
   if (comps.wr) comps.wr.ends = endsOf(wr);
@@ -194,10 +211,10 @@ function loadSite(data, fetchedAt) {
   // sub-splits: each comparison's time for each step, as a split time. A real run's own; for average, best and worst,
   // the time into the split (the average, fastest or slowest of the runs that did that step) after the comparison's
   // split start
-  const subsOf = r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t) : null);
+  const subsOf = r => derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t) : null);
   if (comps.pb) comps.pb.subs = subsOf(pb);
   if (comps.wr) comps.wr.subs = subsOf(wr);
-  const into = valid.map(r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t == null ? null : x.t - s.start) : null));
+  const into = valid.map(r => derive(r).splits.map(s => s.subs ? s.subs.map(x => x.t == null ? null : x.t - s.start) : null));
   const pick = {avg: xs => xs.reduce((a, b) => a + b, 0) / xs.length, best: xs => Math.min(...xs), worst: xs => Math.max(...xs)};
   for (const k of ["avg", "best", "worst"]) if (comps[k]) comps[k].subs = api.SPLITS.map((_, i) => {
     const counts = Math.max(0, ...into.map(x => x[i] ? x[i].length : 0));
@@ -205,13 +222,13 @@ function loadSite(data, fetchedAt) {
     return [...Array(counts)].map((_, j) => { const xs = into.map(x => x[i] && x[i][j]).filter(v => v != null); return xs.length ? (i ? comps[k].ends[i - 1] : 0) + pick[k](xs) : null; });
   });
   // the Midgame checklist's splits: how long each took (time in its area), for the runs that finished it
-  const midOf = r => { const m = api.derive(r).splits[3].mid; const o = {}; if (m) for (const x of m.sections) if (x.split && x.complete) o[x.key] = x.dur; return o; };
+  const midOf = r => { const m = derive(r).splits[MIDGAME].mid; const o = {}; if (m) for (const x of m.sections) if (x.split && x.complete) o[x.key] = x.dur; return o; };
   if (comps.pb) comps.pb.mid = midOf(pb);
   if (comps.wr) comps.wr.mid = midOf(wr);
   const allMid = valid.map(midOf);
   for (const k of ["avg", "best", "worst"]) if (comps[k]) { comps[k].mid = {}; for (const key of new Set(allMid.flatMap(o => Object.keys(o)))) { const xs = allMid.map(o => o[key]).filter(v => v != null); comps[k].mid[key] = pick[k](xs); } }
   // how long each step took: a real run's own; the average, fastest (gold) and slowest of all the runs
-  const durOf = r => api.derive(r).splits.map(s => s.subs ? s.subs.map(x => x.dur) : null);
+  const durOf = r => derive(r).splits.map(s => s.subs ? s.subs.map(x => x.dur) : null);
   if (comps.pb) comps.pb.subDurs = durOf(pb);
   if (comps.wr) comps.wr.subDurs = durOf(wr);
   const allDurs = valid.map(durOf);
@@ -557,7 +574,7 @@ function readRun(api) {
 }
 function compute() {
   finished = null;
-  const {api} = site, n = api.SPLITS.length;
+  const {api} = site;
   const base = {v: VERSION, replay: replay ? {name: replay.name, t: replay.t, total: replay.total, playing: replay.playing, speed: replay.speed} : null,
     rate: replay && replay.playing ? replay.speed : 1, phone: (lanLinks()[0] || {}).url || null, title: site.title, siteRuns: site.runs, siteUrl: SITE, updateReady, siteAt: site.fetchedAt, comps: site.comps, icons: site.icons,
     world: world ? path.basename(world) : null, file: !!file, open, paused, anchor, now: Date.now(),
@@ -591,13 +608,12 @@ function compute() {
   const d = api.derive(run);
   const end = done0 ? run.finalIgt : now;
   // each split: its time so far, and when it's running, where the running part started
-  const rows0Post = api.SPLITS.length - 1;
   const rows = d.splits.map((s, i) => {
     const segs = s.segs.filter(g => g[1] > g[0]);
     const last = segs[segs.length - 1], running = !done0 && last && last[1] === end;
     const dur = segs.reduce((a, g) => a + g[1] - g[0], 0);
     return {name: s.name, icon: s.icon, has: segs.length > 0, dur: running ? dur - (last[1] - last[0]) : dur, from: running ? last[0] : null, end: segs.length ? last[1] : null,
-      start: s.start, subs: s.subs || null, mid: s.mid || null};
+      start: s.start, subs: s.subs || null, mid: s.mid ? {...s.mid, sections: s.mid.sections.map(({prog, ...x}) => x)} : null};   // (not its history: only the pace needs that, from the runs)
   });
   // nothing running yet (e.g. still in Any%, or between splits): the first split with nothing in it, from the end of the one before
   const firstEmpty = rows => { if (!done0 && !rows.some(r => r.from != null)) {
