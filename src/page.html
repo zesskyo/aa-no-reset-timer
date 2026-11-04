@@ -586,7 +586,9 @@ function render() {
   put($("segTimer"), segCur != null ? fmtMs(segCur, SEG_CLOCK) : "");
   const segName = onSub && onSub.mid ? midCmp(onSub.mid)[1] || (C ? C.short : "") : C ? C.short : "";
   put($("segComp"), C && on && key !== "best" ? `${esc(segName)}: ${segC != null ? fmt(segC) : "—"}` : "");
-  put($("segBest"), on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
+  // (Post-endgame itself: the slowest instead, as most runs have none and its best is nothing)
+  const worst = S.comps.worst, segW = !onSub && on && on.i === POST && worst && worst.splits[POST] != null ? worst.splits[POST] : null;
+  put($("segBest"), segW != null ? (key !== "worst" ? `Worst: ${fmt(segW)}` : "") : on && best ? `Best: ${segB != null ? fmt(segB) : "—"}` : "");
 
   const kv = (k, v, cl = "") => `<div class="kv"><span>${k}</span><span class="${cl}">${v}</span></div>`;
   // (all of them always there, "—" until there's something, so the page is always the same height: for cropping in OBS)
