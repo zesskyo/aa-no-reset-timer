@@ -103,7 +103,7 @@ body{color:var(--text);font-family:"Minecraft",ui-monospace,monospace;font-size:
 const $ = id => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 // the parts (S.rows, SPLITS in the site's config.js) and the main splits they're in (S.top, TOP)
-const MIDGAME = 3, DEBRIS = 4, ENDGAME = 5;
+const MIDGAME = 3, DEBRIS = 4, ENDGAME = 5, POST = 6;
 const T_EARLY = 0, T_MID = 1, T_END = 2, T_POST = 3;
 // how the splits look, as set in AA Live's settings (put in by the server); a link's own ?comp=, ?ms=… still win
 // (and again whenever they're changed there: in place, see relook)
@@ -558,7 +558,19 @@ function render() {
     const tail = Math.max(0, mean(xs) - steps.reduce((a, st, j) => a + (ownSplit(r, j) ? 0 : mean(st)), 0)), between = Math.max(0, r.cur - used);
     return left + Math.max(0, tail - between);
   };
-  const pace = PC ? now + rows.filter(r => !r.fin).reduce((a, r) => a + (r.on ? paceOn(r) : rest(PC.splits[r.i], r.cur)), 0) : null;
+  // (Post-endgame, before it starts: once Endgame has, by what's left of the checklist, as the runs with as much left
+  // when their Endgame started did; most with 0 or 1 left had none, about half with 2 or more had one. Before then, all
+  // the runs)
+  const POST_LEFT = 2;
+  const postLeft = () => {
+    const mid = rows[MIDGAME] && rows[MIDGAME].mid, eg = tops.some(t => t.k >= T_END && (t.on || t.fin));
+    if (!eg || !mid || !PC.post || !PC.post.length) return null;
+    const n = mid.sections.filter(x => x.key !== "debris" && x.need && x.done == null).length, many = n >= POST_LEFT;
+    const xs = PC.post.filter(([l]) => (l >= POST_LEFT) === many).map(([, d]) => d);
+    return xs.length ? mean(xs) : null;
+  };
+  const restOf = r => { if (r.i === POST && !(r.cur > 0)) { const p = postLeft(); if (p != null) return p; } return rest(PC.splits[r.i], r.cur); };
+  const pace = PC ? now + rows.filter(r => !r.fin).reduce((a, r) => a + (r.on ? paceOn(r) : restOf(r)), 0) : null;
   const on = rows[ri];
   const t = $("timer");
   put(t, fmtMs(now, CLOCK));

@@ -145,6 +145,8 @@ function localRuns(siteRuns) {
 // How far through Midgame's checklist a run was as it went: [fraction, Midgame left] each time it went up, where the
 // fraction is the average over the checklist of how much of each is done (a shell or a gold block counts as its share)
 const countAt = (cs, t) => { let v = 0; for (const [x, c] of cs) { if (x > t) break; v = c; } return v; };
+// How much of Midgame's checklist was still to do at a time (Debris aside, and the counters with no target)
+const leftOf = (mid, t) => mid.sections.filter(x => x.key !== "debris" && x.need && (x.done == null || x.done > t)).length;
 function throughCurve(p) {
   const xs = p.mid.sections.filter(x => x.key !== "debris" && x.need && x.prog);
   if (!xs.length) return null;
@@ -200,6 +202,9 @@ function loadSite(data, fetchedAt) {
     // (and by how far through each thing on it they were, a shell or a gold block as much as a whole thing: for each
     // run, [how far through, how much of its Midgame was left] each time that went up; see the page)
     midP: mids.map(throughCurve).filter(Boolean),
+    // (Post-endgame, by what of the checklist was left when Endgame started: [how many, Post-endgame's time]; see the page)
+    post: ds.map(d => { const es = d.top[2].start, mid = d.splits[MIDGAME].mid; if (es == null || !mid) return null;
+      return [leftOf(mid, es), d.splits[POST].dur ?? 0]; }).filter(Boolean),
   };
   // each comparison's split times (the time each split ended at): a real run's own (a split it didn't have ends where the
   // one before did); for average, best and worst, the segments added up, as LiveSplit does
