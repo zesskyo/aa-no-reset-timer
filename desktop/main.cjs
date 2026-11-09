@@ -93,8 +93,8 @@ function openWindow() {
 }
 
 // Lock position (right-click): the splits can't be moved or resized, and while the game's being played (a world open,
-// not paused) clicks go through them to what's behind, and they can't take the focus, so a stray click doesn't take
-// Minecraft out of the game. Paused, or no world: right-click them, or open the settings. (From the timer's quick
+// not paused) clicks go through them to what's behind (and on a Mac they can't take the focus), so a stray click doesn't
+// take Minecraft out of the game. Paused, or no world: right-click them, or open the settings. (From the timer's quick
 // events: open and paused.)
 let playing = false;
 function applyLock() {
@@ -106,7 +106,9 @@ function applyPlaying() {
   if (!win) return;
   const through = playing && !!prefs.locked;
   win.setIgnoreMouseEvents(through, {forward: true});
-  if (process.platform !== "linux") win.setFocusable(!through);
+  // (on Windows, changing whether the window can take the focus takes it away from the game: unpausing tabbed out of
+  // Minecraft. Clicks going through it already keep it from taking the focus there.)
+  if (process.platform === "darwin") win.setFocusable(!through);
 }
 function followGame() {
   const again = () => setTimeout(followGame, 1000);
