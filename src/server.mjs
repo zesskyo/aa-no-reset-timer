@@ -308,6 +308,7 @@ function findWorld() {
 let world = null, file = null, offset = 0, rest = Buffer.alloc(0), text = "", raw = "", plain = false, lastParse = 0;   // (raw: the log as Hermes wrote it, for uploading)
 let anchor = null;      // {igt, wall}: the IGT at the latest line, and when that was
 let paused = true, open = false, changed = false;
+let inNether = false;   // (in the Nether at the last update: worked out again every 2 seconds there, for the ghost file's news)
 let watchedLive = false;   // (the log grew while AA Live was following it: the world was played with it running)
 
 function reset(w) {
@@ -376,9 +377,9 @@ function ghostWet() {
   } catch { return null; }
 }
 
-// From the whole ghost file, every 10 seconds or so (every 2 in The End, waiting for the gateway): when they were deep in
-// the Nether (below y 25, where debris is mined), so the Debris split starts when they go down there rather than at the
-// first debris, when they got to the outer End, where Any% ends, when they left the enchanting table, where Enchanting
+// From the whole ghost file, every 10 seconds or so (every 2 in The End, waiting for the gateway, and in the Nether, for
+// going down to dig for debris): when they were deep in the Nether (below y 25, where debris is mined), and whether
+// they're down below y 20 now, so the Debris split starts when they go down there rather than at the first debris, when they got to the outer End, where Any% ends, when they left the enchanting table, where Enchanting
 // ends, and when they got to their base before a campfire there, where Endgame starts. (Replaying a log: a .ghost beside it.)
 let ghostCache = {f: null, size: -1, clock: 0, at: 0, facts: {}, marks: ""};
 function ghostFacts(run) {
@@ -394,9 +395,9 @@ function ghostFacts(run) {
     // (again when there's more of it, or more of the log to line it up with)
     // (and straight away for a new enchanting-table pickup or campfire: the splits that hang on them)
     const clock = (run.clock || []).length, marks = ["ench", "campfire"].map(k => (run.st[k] || []).length).join();
-    if (f !== ghostCache.f || marks !== ghostCache.marks || ((size !== ghostCache.size || clock !== ghostCache.clock) && Date.now() - ghostCache.at > ((run.dims[run.dims.length - 1] || [])[1] === "e" ? 2000 : 10000))) {
+    if (f !== ghostCache.f || marks !== ghostCache.marks || ((size !== ghostCache.size || clock !== ghostCache.clock) && Date.now() - ghostCache.at > (["e", "n"].includes((run.dims[run.dims.length - 1] || [])[1]) ? 2000 : 10000))) {
       const g = GHOST.readGhost(fs.readFileSync(f), run);
-      ghostCache = {f, size, clock, marks, at: Date.now(), facts: g ? GHOST.ghostFacts(g, run.st) : {}};
+      ghostCache = {f, size, clock, marks, at: Date.now(), facts: g ? GHOST.ghostFacts(g, run.st, {live: true}) : {}};
     }
     return ghostCache.facts;
   } catch { return {}; }
@@ -595,6 +596,10 @@ function compute() {
   const now = anchor ? Math.max(anchor.igt, run.finalIgt) : run.finalIgt;
   const gf = ghostFacts({...run, finalIgt: now});
   run.st.deep = (gf.deep || []).filter(t => t <= now);
+  // (down below y 20 in the last 15 seconds: digging for debris now. The ghost file comes a few seconds behind)
+  const dig = (gf.dig || []).filter(t => t <= now).pop();
+  run.st.digging = dig != null && now - dig <= 15000 ? dig : null;
+  inNether = (run.dims[run.dims.length - 1] || [])[1] === "n";
   if (gf.outerEnd != null && (!REPLAY || gf.outerEnd <= now + 1000)) run.st.outerEnd = gf.outerEnd;
   if (gf.campArrive) run.st.campArrive = gf.campArrive;
   if (gf.enchLeave) run.st.enchLeave = gf.enchLeave.filter(x => x[0] <= now).map(x => [x[0], x[1] != null && x[1] <= now ? x[1] : null]);
@@ -745,6 +750,8 @@ function tick(sameWorld) {
   const q = JSON.stringify({open, paused, anchor});
   if (q !== quickSent) { quickSent = q; const msg = "event: quick\ndata: " + q + "\n\n"; for (const c of clients) c.write(msg); }
   // the splits are worked out again at most 5 times a second (only the new lines are read: see readRun)
+  // (in the Nether, every 2 seconds too, though the log hasn't changed: going down to dig for debris is only in the ghost file)
+  if (inNether && open && !paused && Date.now() - lastParse >= 2000) changed = true;
   if (changed && Date.now() - lastParse >= 200) { changed = false; lastParse = Date.now(); update(); }
 }
 setInterval(tick, 100);
